@@ -1,0 +1,17 @@
+[Unit]
+Description=Flotec Sales AI - background worker & scheduler
+After=network.target postgresql.service
+
+[Service]
+User=flotec
+Group=flotec
+WorkingDirectory=/srv/flotec/app
+EnvironmentFile=/srv/flotec/app/.env
+ExecStart=/srv/flotec/app/.venv/bin/python manage.py run_worker --sleep 15
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% load app_tags %}
+{% block title %}{{ country.name }}{% endblock %}
+{% block page_title %}{{ country.name }} <small class="text-muted fs-6">{{ country.continent.name }} · {{ country.timezone }}</small>{% endblock %}
+{% block page_actions %}{% if user_can_edit %}
+<a class="btn btn-sm btn-primary" href="{% url 'research:run_create' %}?country={{ country.iso2 }}&kind=buyer"><i class="bi bi-search"></i> Find buyers</a>
+<a class="btn btn-sm btn-outline-primary" href="{% url 'research:run_create' %}?country={{ country.iso2 }}&kind=oem"><i class="bi bi-gear-wide-connected"></i> Find OEM buyers</a>
+<form method="post" action="{% url 'research:country_report' country.iso2 %}">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary"><i class="bi bi-file-earmark-bar-graph"></i> AI market report</button></form>
+{% endif %}{% endblock %}
+{% block content %}
+<div class="row g-3">
+<div class="col-lg-4">
+  <div class="card mb-3"><div class="card-header">Buyer database</div><div class="card-body small">
+    <div class="d-flex flex-wrap gap-2 mb-2">{% for k, n in by_category.items %}<span class="badge bg-{{ k|category_colour }} {% if k == 'E' or not k %}text-dark{% endif %}">{{ k|default:"unscored" }}: {{ n }}</span>{% endfor %}</div>
+    <ul class="list-unstyled mb-0">{% for s in by_stage %}<li>{{ s.stage }}: {{ s.n }}</li>{% empty %}<li class="text-muted">No companies yet.</li>{% endfor %}</ul>
+  </div></div>
+  {% if user_can_edit %}<div class="card mb-3"><div class="card-header">Research settings</div><div class="card-body"><form method="post" action="{% url 'geo:country_update' country.iso2 %}">{% csrf_token %}{% include "partials/form.html" %}<button class="btn btn-sm btn-primary mt-2">Save</button></form></div></div>{% endif %}
+  <div class="card"><div class="card-header">Research runs</div><ul class="list-group list-group-flush small">{% for r in runs %}<li class="list-group-item"><a href="{% url 'research:run_detail' r.pk %}">{{ r.get_kind_display }} #{{ r.pk }}</a> · {{ r.get_status_display }} · {{ r.added_count }} added<div class="text-muted">{{ r.created_at|date:"d M Y H:i" }}</div></li>{% empty %}<li class="list-group-item text-muted">None yet.</li>{% endfor %}</ul></div>
+</div>
+<div class="col-lg-8">
+  <div class="card mb-3"><div class="card-header">Market reports</div><ul class="list-group list-group-flush">
+  {% for r in reports %}<li class="list-group-item"><a href="{% url 'geo:report_detail' r.pk %}">Report {{ r.created_at|date:"d M Y" }}</a> <span class="badge bg-light text-dark border">demand: {{ r.get_demand_level_display }}</span> <span class="badge bg-{% if r.confidence == 'high' %}success{% elif r.confidence == 'medium' %}primary{% else %}secondary{% endif %}">confidence {{ r.get_confidence_display }}</span> <span class="small text-muted">{{ r.get_status_display }} · {{ r.sources|length }} sources</span><div class="small">{{ r.summary|truncatechars:240 }}</div></li>
+  {% empty %}<li class="list-group-item text-muted small">No market report yet.</li>{% endfor %}</ul></div>
+  <div class="card"><div class="card-header">Companies in {{ country.name }}</div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Company</th><th>Type</th><th>OEM</th><th>Stage</th><th>Owner</th></tr></thead><tbody>
+  {% for c in companies %}<tr><td><a href="{{ c.get_absolute_url }}">{{ c.name }}</a></td><td class="small">{{ c.get_company_type_display }}</td><td>{% if c.oem_category %}<span class="badge bg-{{ c.oem_category|category_colour }} {% if c.oem_category == 'E' %}text-dark{% endif %}">{{ c.oem_category }}</span>{% endif %} {{ c.oem_score }}</td><td><span class="badge bg-{{ c.stage|stage_colour }} {% if c.stage == 'lost' %}text-dark{% endif %}">{{ c.get_stage_display }}</span></td><td class="small">{{ c.owner.username|default:"—" }}</td></tr>
+  {% empty %}<tr><td colspan="5" class="text-muted small">No companies yet.</td></tr>{% endfor %}</tbody></table></div></div>
+</div></div>
+{% endblock %}

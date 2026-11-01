@@ -1,0 +1,7 @@
+{% extends "public_base.html" %}
+{% block title %}Unsubscribe{% endblock %}
+{% block content %}
+{% if invalid %}<h5>Link not valid</h5><p class="mb-0">This unsubscribe link is invalid or has expired. Please reply to the e-mail and ask us to remove you; we will do so promptly.</p>
+{% elif done %}<h5>You have been unsubscribed</h5><p class="mb-0"><b>{{ email }}</b> will not receive further e-mails from us.</p>
+{% else %}<h5>Unsubscribe</h5><p>Stop all further e-mails from us to <b>{{ email }}</b>?</p><form method="post"><button class="btn btn-primary">Yes, unsubscribe me</button></form>{% endif %}
+{% endblock %}

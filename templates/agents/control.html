@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Automation{% endblock %}
+{% block page_title %}Automation control{% endblock %}
+{% block page_subtitle %}Execution mode, kill switch, schedules, background jobs and AI spend.{% endblock %}
+{% block page_actions %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'agents:job_list' %}">All jobs</a><a class="btn btn-sm btn-outline-secondary" href="{% url 'agents:run_log' %}">Agent log &amp; costs</a>{% endblock %}
+{% block content %}
+<div class="row g-3 mb-3">
+  <div class="col-lg-5"><div class="card h-100"><div class="card-header">Automation state</div><div class="card-body">
+    <div class="fs-5 mb-2"><span class="badge {% if sys.automation_state == 'running' %}bg-success{% elif sys.automation_state == 'paused' %}bg-warning text-dark{% else %}bg-dark{% endif %}">{{ sys.get_automation_state_display }}</span>
+    {% if sys.automation_state_changed_at %}<span class="small text-muted">since {{ sys.automation_state_changed_at|date:"d M Y H:i" }}{% if sys.automation_state_changed_by %} by {{ sys.automation_state_changed_by }}{% endif %}</span>{% endif %}</div>
+    <p class="small text-muted mb-3"><b>Running</b>: schedules and agents work. <b>Paused</b>: schedules stop; manual actions still run. <b>Stopped</b>: emergency stop — queued jobs cancelled, no AI calls, nothing is sent.</p>
+    {% if user_is_manager %}<div class="d-flex gap-2 flex-wrap">
+      {% if sys.automation_state != 'running' %}<form method="post" action="{% url 'agents:set_state' %}">{% csrf_token %}<input type="hidden" name="state" value="running"><button class="btn btn-success" data-confirm="Resume automation?"><i class="bi bi-play-fill"></i> Resume</button></form>{% endif %}
+      {% if sys.automation_state == 'running' %}<form method="post" action="{% url 'agents:set_state' %}">{% csrf_token %}<input type="hidden" name="state" value="paused"><button class="btn btn-warning"><i class="bi bi-pause-fill"></i> Pause</button></form>{% endif %}
+      {% if sys.automation_state != 'stopped' %}<form method="post" action="{% url 'agents:set_state' %}">{% csrf_token %}<input type="hidden" name="state" value="stopped"><button class="btn btn-danger" data-confirm="Emergency stop: cancel all queued jobs and halt every agent immediately?"><i class="bi bi-stop-fill"></i> Stop now</button></form>{% endif %}
+    </div>{% endif %}
+    <hr><div class="small">Worker: {% if last_worker_activity %}last job started {{ last_worker_activity|timesince }} ago{% else %}<span class="text-danger">no job has run yet – is <code>manage.py run_worker</code> running?</span>{% endif %} · {{ queued }} queued · {{ running }} running</div>
+  </div></div></div>
+  <div class="col-lg-4"><div class="card h-100"><div class="card-header">Execution mode</div><div class="card-body">
+    <div class="fs-6 mb-2"><span class="badge {% if sys.execution_mode == 3 %}bg-danger{% elif sys.execution_mode == 2 %}bg-primary{% else %}bg-secondary{% endif %}">{{ sys.get_execution_mode_display }}</span></div>
+    <ul class="small text-muted ps-3"><li>Mode 1: research and verified leads only.</li><li>Mode 2: AI drafts, a human approves every send.</li><li>Mode 3: pre-approved kinds ({{ sys.auto_send_kinds|join:", "|default:"none" }}) may send automatically within limits; sensitive content always needs a human.</li></ul>
+    {% if user_is_admin %}<form method="post" action="{% url 'agents:set_mode' %}" class="d-flex gap-2">{% csrf_token %}<select name="mode" class="form-select form-select-sm">{% for v, l in modes %}<option value="{{ v }}" {% if v == sys.execution_mode %}selected{% endif %}>{{ l }}</option>{% endfor %}</select><button class="btn btn-sm btn-primary" data-confirm="Change the execution mode?">Apply</button></form>{% endif %}
+  </div></div></div>
+  <div class="col-lg-3"><div class="card h-100 kpi"><div class="card-header">AI spend this month</div><div class="card-body">
+    <div class="value">${{ spend|floatformat:2 }}</div><div class="label">of ${{ sys.monthly_ai_budget_usd }} budget</div>
+    <div class="progress mt-2" style="height:8px"><div class="progress-bar {% if spend >= sys.monthly_ai_budget_usd %}bg-danger{% endif %}" style="width:{% widthratio spend sys.monthly_ai_budget_usd 100 %}%"></div></div>
+    {% if not ai_configured %}<div class="small text-danger mt-2">ANTHROPIC_API_KEY not set – AI agents disabled.</div>{% endif %}
+  </div></div></div>
+</div>
+
+<div class="card mb-3"><div class="card-header">Schedules</div><div class="table-responsive"><table class="table table-sm mb-0 align-middle"><thead><tr><th>Task</th><th>Cron</th><th>Enabled</th><th>Last run</th><th>Next run</th><th></th></tr></thead><tbody>
+{% for t in tasks %}<tr><td>{{ t.name }}<div class="small text-muted">{{ t.description }}</div></td><td class="text-nowrap"><code>{{ t.cron }}</code></td><td>{% if t.enabled %}<span class="badge bg-success">on</span>{% else %}<span class="badge bg-secondary">off</span>{% endif %}</td><td class="small">{{ t.last_run_at|date:"d M H:i"|default:"—" }}</td><td class="small">{{ t.next_run_at|date:"d M H:i"|default:"—" }}</td>
+<td class="text-nowrap">{% if user_is_manager %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'agents:task_edit' t.pk %}">Edit</a> <form class="d-inline" method="post" action="{% url 'agents:task_run_now' t.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-primary">Run now</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6" class="text-muted small">No schedules. Run <code>manage.py setup_initial_data</code>.</td></tr>{% endfor %}
+</tbody></table></div></div>
+
+<div class="row g-3">
+<div class="col-lg-6"><div class="card h-100"><div class="card-header">Agents – last 7 days</div><table class="table table-sm mb-0"><thead><tr><th>Agent</th><th>Runs</th><th>Failed</th><th class="text-end">Cost</th></tr></thead><tbody>
+{% for a in per_agent %}<tr><td><a href="{% url 'agents:run_log' %}?agent={{ a.agent }}">{{ a.label }}</a></td><td>{{ a.n }}</td><td class="{% if a.failed %}text-danger{% endif %}">{{ a.failed }}</td><td class="text-end">${{ a.cost|floatformat:3 }}</td></tr>{% empty %}<tr><td colspan="4" class="text-muted small">No agent activity yet.</td></tr>{% endfor %}
+</tbody></table></div></div>
+<div class="col-lg-6"><div class="card h-100"><div class="card-header">Recent errors</div><ul class="list-group list-group-flush small">
+{% for r in failed_recent %}<li class="list-group-item"><b>{{ r.get_agent_display }}</b> · {{ r.action }} · {{ r.started_at|date:"d M H:i" }}{% if r.job %} · <a href="{% url 'agents:job_detail' r.job_id %}">job #{{ r.job_id }}</a>{% endif %}<div class="text-danger">{{ r.error|truncatechars:220 }}</div></li>{% empty %}<li class="list-group-item text-muted">No errors.</li>{% endfor %}
+</ul></div></div>
+</div>
+<div class="card mt-3"><div class="card-header">Latest jobs</div>{% include "agents/_job_table.html" with jobs=jobs %}</div>
+{% endblock %}

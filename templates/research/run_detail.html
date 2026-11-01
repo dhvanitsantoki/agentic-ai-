@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% load app_tags %}
+{% block title %}Research run #{{ run.pk }}{% endblock %}
+{% block page_title %}{{ run.get_kind_display }} #{{ run.pk }} <span class="badge bg-{% if run.status == 'completed' %}success{% elif run.status == 'failed' %}danger{% elif run.status == 'running' %}primary{% else %}secondary{% endif %} fs-6 align-middle">{{ run.get_status_display }}</span>{% endblock %}
+{% block page_subtitle %}{% if run.company %}Company: <a href="{{ run.company.get_absolute_url }}">{{ run.company.name }}</a>{% else %}{{ run.country_names|default:"All countries" }}{% endif %} · created {{ run.created_at|date:"d M Y H:i" }}{% if run.finished_at %} · finished {{ run.finished_at|date:"H:i" }}{% endif %} · cost ${{ run.cost_usd|floatformat:3 }} · {{ run.web_searches }} web searches{% endblock %}
+{% block page_actions %}{% if run.status == 'queued' and user_can_edit %}<form method="post" action="{% url 'research:run_cancel' run.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Cancel</button></form>{% endif %}
+{% if run.status == 'queued' or run.status == 'running' %}<a class="btn btn-sm btn-outline-secondary" href=""><i class="bi bi-arrow-clockwise"></i> Refresh</a>{% endif %}{% endblock %}
+{% block content %}
+{% if run.status == 'queued' %}<div class="alert alert-info py-2 small">Waiting for the background worker. {% if app_settings.automation_state == 'stopped' %}<b>Automation is stopped</b> – resume it in Automation to run jobs.{% endif %}</div>{% endif %}
+{% if run.error %}<div class="alert alert-danger small"><b>Error:</b> {{ run.error }}</div>{% endif %}
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-2"><div class="card kpi"><div class="card-body"><div class="value">{{ run.found_count }}</div><div class="label">Found</div></div></div></div>
+  <div class="col-6 col-md-2"><div class="card kpi"><div class="card-body"><div class="value text-success">{{ run.added_count }}</div><div class="label">Added</div></div></div></div>
+  <div class="col-6 col-md-2"><div class="card kpi"><div class="card-body"><div class="value">{{ run.duplicate_count }}</div><div class="label">Duplicates</div></div></div></div>
+  <div class="col-6 col-md-2"><div class="card kpi"><div class="card-body"><div class="value text-warning">{{ run.review_count }}</div><div class="label">Need review</div></div></div></div>
+  <div class="col-6 col-md-2"><div class="card kpi"><div class="card-body"><div class="value">{{ run.verified_contacts }}</div><div class="label">Verified e-mails</div></div></div></div>
+  <div class="col-6 col-md-2"><div class="card kpi"><div class="card-body"><div class="value text-danger">{{ run.rejected_count }}</div><div class="label">Rejected</div></div></div></div>
+</div>
+{% if run.summary %}<div class="card mb-3"><div class="card-header">Agent notes</div><div class="card-body small">{{ run.summary|linebreaksbr }}</div></div>{% endif %}
+{% for r in market_reports %}<div class="alert alert-success"><a href="{% url 'geo:report_detail' r.pk %}">Open the {{ r.country.name }} market report</a> (confidence {{ r.get_confidence_display }}).</div>{% endfor %}
+{% for f in findings %}
+<div class="card mb-2"><div class="card-body py-2">
+  <div class="d-flex flex-wrap gap-2 align-items-center">
+    <b>{% if f.company %}<a href="{{ f.company.get_absolute_url }}">{{ f.name }}</a>{% else %}{{ f.name }}{% endif %}</b>
+    {% if f.website %}<a class="small" href="{{ f.website }}" target="_blank" rel="noopener noreferrer">{{ f.website|truncatechars:50 }}</a>{% endif %}
+    <span class="badge bg-{% if f.status == 'added' %}success{% elif f.status == 'needs_review' %}warning text-dark{% elif f.status == 'rejected' %}danger{% else %}secondary{% endif %}">{{ f.get_status_display }}</span>
+    {% if f.verification.score %}<span class="small text-muted">score {{ f.verification.score.score }}</span>{% endif %}
+    <span class="small text-muted">{{ f.reason }}</span>
+  </div>
+  {% if f.verification %}<details class="small mt-1"><summary>Verification details</summary>
+    <div class="mt-1">Website: {% if f.verification.website.ok %}<span class="text-success">reachable</span>{% else %}<span class="text-danger">not reachable ({{ f.verification.website.error }})</span>{% endif %}</div>
+    <div>Verified contacts kept: {{ f.verification.contacts|length }}</div>
+    {% if f.verification.rejected %}<div class="text-danger">Discarded because not found on the cited page:<ul class="mb-0">{% for r in f.verification.rejected %}<li>{{ r.field }}: {{ r.value }} ({{ r.reason }})</li>{% endfor %}</ul></div>{% endif %}
+    <div>Sources: {% for s in f.verification.sources %}<a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">{{ forloop.counter }}</a>{% if not s.reachable %}<span class="text-danger">✗</span>{% endif %} {% endfor %}</div>
+  </details>{% endif %}
+</div></div>
+{% empty %}{% if run.status == 'completed' %}<div class="text-muted">No findings were returned.</div>{% endif %}{% endfor %}
+{% endblock %}

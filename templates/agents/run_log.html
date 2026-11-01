@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Agent log{% endblock %}
+{% block page_title %}Agent activity &amp; AI costs{% endblock %}
+{% block page_subtitle %}Totals for current filter: ${{ totals.cost|default:0|floatformat:3 }} · {{ totals.tin|default:0 }} input / {{ totals.tout|default:0 }} output tokens · {{ totals.searches|default:0 }} web searches{% endblock %}
+{% block content %}
+<form class="d-flex gap-2 mb-3" method="get"><select class="form-select form-select-sm" style="max-width:260px" name="agent"><option value="">All agents</option>{% for v, l in agents %}<option value="{{ v }}" {% if f.agent == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+<select class="form-select form-select-sm" style="max-width:180px" name="status"><option value="">Any status</option>{% for v, l in statuses %}<option value="{{ v }}" {% if f.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select><button class="btn btn-sm btn-outline-primary">Filter</button></form>
+<div class="card"><div class="table-responsive"><table class="table table-sm mb-0 align-middle"><thead><tr><th>Time</th><th>Agent</th><th>Action</th><th>Status</th><th>Model</th><th>Calls</th><th>Tokens in/out</th><th>Searches</th><th class="text-end">Cost</th><th>Details</th></tr></thead><tbody>
+{% for r in page_obj %}<tr><td class="small text-nowrap">{{ r.started_at|date:"d M H:i" }}</td><td class="small">{{ r.get_agent_display }}</td><td class="small"><code>{{ r.action }}</code></td><td><span class="badge bg-{% if r.status == 'succeeded' %}success{% elif r.status == 'failed' %}danger{% elif r.status == 'skipped' %}secondary{% else %}primary{% endif %}">{{ r.get_status_display }}</span></td><td class="small">{{ r.model }}</td><td>{{ r.llm_calls }}</td><td class="small">{{ r.input_tokens }} / {{ r.output_tokens }}</td><td>{{ r.web_searches }}</td><td class="text-end small">${{ r.cost_usd|floatformat:4 }}</td><td class="small">{% if r.error %}<span class="text-danger">{{ r.error|truncatechars:90 }}</span>{% else %}{{ r.summary|truncatechars:90 }}{% endif %}</td></tr>
+{% empty %}<tr><td colspan="10">{% include "partials/empty.html" %}</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% include "partials/pagination.html" %}
+{% endblock %}

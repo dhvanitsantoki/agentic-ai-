@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ pl.name }}{% endblock %}
+{% block page_title %}{{ pl.name }} <span class="badge {% if pl.status == 'approved' %}bg-success{% elif pl.status == 'draft' %}bg-warning text-dark{% else %}bg-secondary{% endif %} fs-6 align-middle">{{ pl.get_status_display }}</span>{% endblock %}
+{% block page_subtitle %}{{ pl.currency }} · {{ pl.get_incoterm_basis_display }} · valid {{ pl.valid_from|date:"d M Y" }} – {{ pl.valid_until|date:"d M Y"|default:"until replaced" }}{% if pl.approved_by %} · approved by {{ pl.approved_by }} {{ pl.approved_at|date:"d M Y H:i" }}{% endif %}{% endblock %}
+{% block page_actions %}{% if user_is_manager %}
+{% if pl.is_editable %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'products:pricelist_edit' pl.pk %}">Edit header</a><a class="btn btn-sm btn-outline-secondary" href="{% url 'products:pricelist_import' pl.pk %}"><i class="bi bi-upload"></i> Import CSV</a>
+<form method="post" action="{% url 'products:pricelist_action' pl.pk %}">{% csrf_token %}<input type="hidden" name="action" value="approve"><button class="btn btn-sm btn-success" data-confirm="Approve these prices? They become locked and usable in quotations.">Approve</button></form>{% endif %}
+{% if pl.status == 'approved' %}<form method="post" action="{% url 'products:pricelist_action' pl.pk %}">{% csrf_token %}<input type="hidden" name="action" value="archive"><button class="btn btn-sm btn-outline-secondary" data-confirm="Archive this price list? Quotations will stop using it.">Archive</button></form>{% endif %}
+<form method="post" action="{% url 'products:pricelist_action' pl.pk %}">{% csrf_token %}<input type="hidden" name="action" value="new_version"><button class="btn btn-sm btn-outline-primary">Create new version</button></form>
+{% endif %}{% endblock %}
+{% block content %}
+{% if pl.notes %}<div class="alert alert-light border small">{{ pl.notes|linebreaksbr }}</div>{% endif %}
+<div class="card"><div class="table-responsive"><table class="table table-sm mb-0 align-middle"><thead><tr><th>Product</th><th>Size</th><th>SKU</th><th>From qty</th><th class="text-end">Unit price ({{ pl.currency }})</th><th></th></tr></thead><tbody>
+{% for i in items %}<tr><td>{{ i.variant.product.name }}</td><td>{{ i.variant.size }}</td><td>{{ i.variant.sku }}</td><td>{{ i.min_quantity }}</td><td class="text-end">{{ i.unit_price }}</td>
+<td>{% if pl.is_editable and user_is_manager %}<form method="post" action="{% url 'products:pricelist_item_delete' i.pk %}">{% csrf_token %}<button class="btn btn-link btn-sm text-danger p-0">remove</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6" class="text-muted small">No prices yet.</td></tr>{% endfor %}
+</tbody></table></div>
+{% if item_form and user_is_manager %}<div class="card-body border-top"><form method="post" action="{% url 'products:pricelist_item_add' pl.pk %}" class="row g-2 align-items-end">{% csrf_token %}
+<div class="col-md-6"><label class="form-label small">Size / SKU</label>{{ item_form.variant }}</div><div class="col-md-2"><label class="form-label small">Unit price</label>{{ item_form.unit_price }}</div><div class="col-md-2"><label class="form-label small">From quantity</label>{{ item_form.min_quantity }}</div><div class="col-md-2"><button class="btn btn-sm btn-primary w-100">Add price</button></div></form></div>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block public_content %}
+<div class="container" style="max-width:420px; margin-top:10vh">
+  <div class="text-center mb-4"><h3 class="mb-0"><i class="bi bi-droplet-half text-primary"></i> Flotec Export Sales AI</h3><div class="text-muted">Ajay Plastic · Ahmedabad</div></div>
+  <div class="card"><div class="card-body p-4">
+    {% if form.errors or throttled %}<div class="alert alert-danger py-2">{% if throttled %}Too many failed attempts. Please wait 15 minutes and try again.{% else %}Invalid username or password.{% endif %}</div>{% endif %}
+    <form method="post">{% csrf_token %}
+      <div class="mb-3"><label class="form-label" for="id_username">Username</label><input class="form-control" name="username" id="id_username" autofocus required autocomplete="username"></div>
+      <div class="mb-3"><label class="form-label" for="id_password">Password</label><input class="form-control" type="password" name="password" id="id_password" required autocomplete="current-password"></div>
+      <input type="hidden" name="next" value="{{ next }}">
+      <button class="btn btn-primary w-100">Sign in</button>
+    </form>
+  </div></div>
+</div>
+{% endblock %}

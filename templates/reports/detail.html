@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% load app_tags %}
+{% block title %}{{ snap }}{% endblock %}
+{% block page_title %}{{ snap.get_period_display }} report{% endblock %}
+{% block page_subtitle %}{{ snap.start }} – {{ snap.end }} · generated {{ snap.generated_at|date:"d M Y H:i" }}{% if snap.emailed_to %} · e-mailed to {{ snap.emailed_to }}{% endif %}{% endblock %}
+{% block page_actions %}<a class="btn btn-sm btn-outline-success" href="{% url 'reports:export' snap.pk 'xlsx' %}"><i class="bi bi-file-earmark-excel"></i> Excel</a><a class="btn btn-sm btn-outline-danger" href="{% url 'reports:export' snap.pk 'pdf' %}"><i class="bi bi-file-earmark-pdf"></i> PDF</a>{% endblock %}
+{% block content %}
+{% if snap.narrative %}<div class="card mb-3"><div class="card-header">Summary (AI, from the numbers below)</div><div class="card-body small" style="white-space:pre-wrap">{{ snap.narrative }}</div></div>{% endif %}
+<div class="row g-3 mb-3">{% for k, v in scalar.items %}<div class="col-6 col-md-3 col-xl-2"><div class="card kpi h-100"><div class="card-body py-2"><div class="label">{{ k|cut:"_"|capfirst }}</div><div class="value fs-4">{{ v }}</div></div></div></div>{% endfor %}</div>
+<p class="small text-muted">{{ m.delivery_note }}</p>
+<div class="row g-3">
+<div class="col-lg-6"><div class="card"><div class="card-header">Country-wise</div><table class="table table-sm mb-0"><thead><tr><th>Country</th><th>New</th><th>Sent</th><th>Replies</th><th>Interested</th><th>Quotes</th></tr></thead><tbody>{% for r in m.by_country %}<tr><td>{{ r.country }}</td><td>{{ r.new_companies|default:0 }}</td><td>{{ r.emails_sent|default:0 }}</td><td>{{ r.replies|default:0 }}</td><td>{{ r.interested|default:0 }}</td><td>{{ r.quotations_sent|default:0 }}</td></tr>{% empty %}<tr><td colspan="6" class="text-muted small">No activity.</td></tr>{% endfor %}</tbody></table></div></div>
+<div class="col-lg-6"><div class="card mb-3"><div class="card-header">Product-wise</div><table class="table table-sm mb-0"><thead><tr><th>Category</th><th>Companies interested</th><th>Quoted lines</th></tr></thead><tbody>{% for r in m.by_product %}<tr><td>{{ r.category }}</td><td>{{ r.companies_interested|default:0 }}</td><td>{{ r.quoted_lines|default:0 }}</td></tr>{% empty %}<tr><td colspan="3" class="text-muted small">No activity.</td></tr>{% endfor %}</tbody></table></div>
+<div class="card"><div class="card-header">Employee-wise</div><table class="table table-sm mb-0"><thead><tr><th>Employee</th><th>E-mails approved</th><th>Quotations approved</th><th>Tasks done</th><th>Open opps</th></tr></thead><tbody>{% for r in m.by_employee %}<tr><td>{{ r.employee }}</td><td>{{ r.emails_approved_sent|default:0 }}</td><td>{{ r.quotations_approved|default:0 }}</td><td>{{ r.tasks_completed|default:0 }}</td><td>{{ r.open_opportunities|default:0 }}</td></tr>{% empty %}<tr><td colspan="5" class="text-muted small">No activity.</td></tr>{% endfor %}</tbody></table></div></div>
+{% if m.agent_error_samples %}<div class="col-12"><div class="card border-danger"><div class="card-header text-danger">Agent errors</div><ul class="list-group list-group-flush small">{% for e in m.agent_error_samples %}<li class="list-group-item"><b>{{ e.agent }}</b> {{ e.action }} – {{ e.error|truncatechars:200 }}</li>{% endfor %}</ul></div></div>{% endif %}
+</div>
+{% endblock %}

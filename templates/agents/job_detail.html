@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Job #{{ job.pk }}{% endblock %}
+{% block page_title %}Job #{{ job.pk }} <code class="fs-6">{{ job.kind }}</code>{% endblock %}
+{% block page_subtitle %}{{ job.get_status_display }} · attempts {{ job.attempts }}/{{ job.max_attempts }} · created {{ job.created_at|date:"d M Y H:i" }}{% endblock %}
+{% block page_actions %}{% if user_is_manager and job.status in 'failed,cancelled' %}<form method="post" action="{% url 'agents:job_retry' job.pk %}">{% csrf_token %}<button class="btn btn-sm btn-primary">Retry</button></form>{% endif %}{% endblock %}
+{% block content %}
+<div class="row g-3"><div class="col-lg-6"><div class="card"><div class="card-header">Payload</div><pre class="card-body small mb-0">{{ job.payload|pprint }}</pre></div>
+<div class="card mt-3"><div class="card-header">Result</div><pre class="card-body small mb-0" style="white-space:pre-wrap">{{ job.result|pprint }}</pre></div></div>
+<div class="col-lg-6">{% if job.last_error %}<div class="card border-danger"><div class="card-header text-danger">Error</div><pre class="card-body small mb-0" style="white-space:pre-wrap">{{ job.last_error }}</pre></div>{% endif %}
+<div class="card mt-3"><div class="card-header">Agent runs</div><ul class="list-group list-group-flush small">{% for r in runs %}<li class="list-group-item">{{ r.get_agent_display }} · {{ r.action }} · {{ r.get_status_display }} · {{ r.llm_calls }} AI calls · ${{ r.cost_usd|floatformat:4 }}{% if r.summary %}<div class="text-muted" style="white-space:pre-wrap">{{ r.summary|truncatechars:800 }}</div>{% endif %}</li>{% empty %}<li class="list-group-item text-muted">None</li>{% endfor %}</ul></div></div></div>
+{% endblock %}

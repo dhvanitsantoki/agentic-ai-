@@ -1,0 +1,1 @@
+{% load app_tags %}{% for f in flags %}<span class="badge bg-warning text-dark me-1">{{ labels|get_item:f|default:f }}</span>{% endfor %}

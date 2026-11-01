@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block page_subtitle %}{{ subtitle|default:"" }}{% endblock %}
+{% block content %}
+<div class="card"><div class="card-body">
+<form method="post" {% if multipart %}enctype="multipart/form-data"{% endif %}>{% csrf_token %}
+  {% include "partials/form.html" %}
+  <div class="mt-4 d-flex gap-2"><button class="btn btn-primary">{{ submit_label|default:"Save" }}</button>
+  <a href="{% if cancel_url %}{{ cancel_url }}{% else %}javascript:history.back(){% endif %}" class="btn btn-outline-secondary">Cancel</a></div>
+</form>
+</div></div>
+{% endblock %}

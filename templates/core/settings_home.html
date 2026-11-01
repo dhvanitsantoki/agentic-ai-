@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block page_subtitle %}Setup checklist, company data, sending policy, mailboxes and users{% endblock %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card h-100"><div class="card-header">Setup checklist</div>
+    <ul class="list-group list-group-flush">
+      <li class="list-group-item d-flex justify-content-between"><span><i class="bi {% if ai_configured %}bi-check-circle-fill text-success{% else %}bi-x-circle-fill text-danger{% endif %}"></i> Anthropic API key (<code>ANTHROPIC_API_KEY</code>)</span><span class="text-muted small">{% if ai_configured %}configured{% else %}set in .env and restart{% endif %}</span></li>
+      <li class="list-group-item d-flex justify-content-between"><span><i class="bi {% if encryption_key_set %}bi-check-circle-fill text-success{% else %}bi-exclamation-circle-fill text-warning{% endif %}"></i> Token encryption key (<code>FIELD_ENCRYPTION_KEY</code>)</span><span class="text-muted small">{% if encryption_key_set %}configured{% else %}development fallback in use{% endif %}</span></li>
+      <li class="list-group-item d-flex justify-content-between"><span><i class="bi {% if not profile_missing %}bi-check-circle-fill text-success{% else %}bi-exclamation-circle-fill text-warning{% endif %}"></i> Company profile</span><span class="text-muted small">{% if profile_missing %}missing: {{ profile_missing|join:", " }}{% else %}complete{% endif %}</span></li>
+      <li class="list-group-item d-flex justify-content-between"><span><i class="bi {% if mail_accounts %}bi-check-circle-fill text-success{% else %}bi-x-circle-fill text-danger{% endif %}"></i> Connected mailbox</span><span class="text-muted small">{{ mail_accounts|length }} connected</span></li>
+      <li class="list-group-item d-flex justify-content-between"><span><i class="bi bi-info-circle text-primary"></i> OAuth apps</span><span class="small">Gmail {% if oauth.gmail %}✔{% else %}✘{% endif %} · Outlook {% if oauth.outlook %}✔{% else %}✘{% endif %} · Zoho {% if oauth.zoho %}✔{% else %}✘{% endif %}</span></li>
+    </ul></div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card h-100"><div class="card-header">Current policy</div><div class="card-body small">
+      <dl class="row mb-0">
+        <dt class="col-6">Execution mode</dt><dd class="col-6">{{ sys.get_execution_mode_display }}</dd>
+        <dt class="col-6">Automation</dt><dd class="col-6">{{ sys.get_automation_state_display }}</dd>
+        <dt class="col-6">Auto-send kinds (Mode 3)</dt><dd class="col-6">{{ sys.auto_send_kinds|join:", "|default:"none" }}</dd>
+        <dt class="col-6">Limits per mailbox</dt><dd class="col-6">{{ sys.daily_send_limit }}/day, {{ sys.hourly_send_limit }}/hour</dd>
+        <dt class="col-6">Recipient sending window</dt><dd class="col-6">{{ sys.send_window_start_hour }}:00–{{ sys.send_window_end_hour }}:00 {% if sys.skip_weekends %}weekdays{% endif %}</dd>
+        <dt class="col-6">Research limit</dt><dd class="col-6">{{ sys.research_daily_company_limit }} companies/day</dd>
+        <dt class="col-6">AI budget</dt><dd class="col-6">US$ {{ sys.monthly_ai_budget_usd }} / month</dd>
+      </dl>
+    </div></div>
+  </div>
+  {% if user_is_admin %}
+  <div class="col-md-4"><a class="card text-decoration-none h-100" href="{% url 'core:company_profile' %}"><div class="card-body"><h6><i class="bi bi-building"></i> Company profile</h6><p class="text-muted small mb-0">Verified facts, capabilities, certifications, default commercial terms.</p></div></a></div>
+  <div class="col-md-4"><a class="card text-decoration-none h-100" href="{% url 'core:system_settings' %}"><div class="card-body"><h6><i class="bi bi-sliders"></i> System settings</h6><p class="text-muted small mb-0">Mode, sending policy, limits, AI models and budget.</p></div></a></div>
+  <div class="col-md-4"><a class="card text-decoration-none h-100" href="{% url 'mailbox:account_list' %}"><div class="card-body"><h6><i class="bi bi-envelope-at"></i> Mailboxes</h6><p class="text-muted small mb-0">Connect Zoho Mail, Gmail or Outlook via OAuth.</p></div></a></div>
+  <div class="col-md-4"><a class="card text-decoration-none h-100" href="{% url 'core:user_list' %}"><div class="card-body"><h6><i class="bi bi-people"></i> Users &amp; roles</h6><p class="text-muted small mb-0">Admin, manager, sales executive, viewer.</p></div></a></div>
+  <div class="col-md-4"><a class="card text-decoration-none h-100" href="{% url 'core:audit_log' %}"><div class="card-body"><h6><i class="bi bi-journal-text"></i> Audit log</h6><p class="text-muted small mb-0">Every human and agent action.</p></div></a></div>
+  <div class="col-md-4"><a class="card text-decoration-none h-100" href="{% url 'outreach:suppression_list' %}"><div class="card-body"><h6><i class="bi bi-slash-circle"></i> Suppression list</h6><p class="text-muted small mb-0">Unsubscribed, bounced and declined addresses.</p></div></a></div>
+  {% endif %}
+</div>
+{% endblock %}

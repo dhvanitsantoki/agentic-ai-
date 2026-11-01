@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Price lists{% endblock %}
+{% block page_title %}Price lists{% endblock %}
+{% block page_subtitle %}Quotations use only approved price lists valid on the quotation date. Approved lists are locked; changes need a new version.{% endblock %}
+{% block page_actions %}{% if user_is_manager %}<a class="btn btn-primary btn-sm" href="{% url 'products:pricelist_create' %}"><i class="bi bi-plus"></i> New price list</a>{% endif %}{% endblock %}
+{% block content %}
+<div class="card"><table class="table mb-0 align-middle"><thead><tr><th>Name</th><th>Currency</th><th>Basis</th><th>Valid</th><th>Items</th><th>Status</th><th>Approved</th></tr></thead><tbody>
+{% for pl in price_lists %}<tr><td><a href="{% url 'products:pricelist_detail' pl.pk %}">{{ pl.name }}</a></td><td>{{ pl.currency }}</td><td>{{ pl.incoterm_basis }}</td><td class="small">{{ pl.valid_from|date:"d M Y" }} – {{ pl.valid_until|date:"d M Y"|default:"open" }}</td><td>{{ pl.n_items }}</td>
+<td><span class="badge {% if pl.status == 'approved' %}bg-success{% elif pl.status == 'draft' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ pl.get_status_display }}</span></td><td class="small">{% if pl.approved_by %}{{ pl.approved_by }} · {{ pl.approved_at|date:"d M Y" }}{% else %}—{% endif %}</td></tr>
+{% empty %}<tr><td colspan="7">{% include "partials/empty.html" with message="No price lists. Without an approved price list, every quotation will be sent to a human for pricing." %}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

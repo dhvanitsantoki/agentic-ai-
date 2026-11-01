@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Jobs{% endblock %}
+{% block page_title %}Background jobs{% endblock %}
+{% block content %}
+<form class="d-flex gap-2 mb-3" method="get"><select class="form-select form-select-sm" style="max-width:200px" name="status"><option value="">Any status</option>{% for v, l in statuses %}<option value="{{ v }}" {% if f.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+<select class="form-select form-select-sm" style="max-width:260px" name="kind"><option value="">Any kind</option>{% for k in kinds %}<option value="{{ k }}" {% if f.kind == k %}selected{% endif %}>{{ k }}</option>{% endfor %}</select><button class="btn btn-sm btn-outline-primary">Filter</button></form>
+<div class="card">{% include "agents/_job_table.html" with jobs=page_obj %}</div>
+{% include "partials/pagination.html" %}
+{% endblock %}

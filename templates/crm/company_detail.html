@@ -1,0 +1,112 @@
+{% extends "base.html" %}{% load app_tags %}
+{% block title %}{{ company.name }}{% endblock %}
+{% block page_title %}{{ company.name }} {% if company.oem_category %}<span class="badge bg-{{ company.oem_category|category_colour }} fs-6 align-middle {% if company.oem_category == 'E' %}text-dark{% endif %}" title="OEM category">{{ company.get_oem_category_display }}</span>{% endif %}{% endblock %}
+{% block page_subtitle %}{{ company.get_company_type_display }} · {{ company.city|default:"" }}{% if company.city and company.country %}, {% endif %}{{ company.country.name|default:"" }}{% if company.website %} · <a href="{{ company.website }}" target="_blank" rel="noopener noreferrer">{{ company.domain }}</a>{% endif %} · <span class="badge bg-{% if company.verification_status == 'verified' %}success{% elif company.verification_status == 'inactive' %}danger{% else %}warning text-dark{% endif %}">{{ company.get_verification_status_display }}</span>{% if company.do_not_contact %} <span class="badge bg-danger">Do not contact</span>{% endif %}{% endblock %}
+{% block page_actions %}{% if user_can_edit %}
+<div class="dropdown"><button class="btn btn-sm btn-primary dropdown-toggle" data-bs-toggle="dropdown"><i class="bi bi-envelope-plus"></i> Draft e-mail (AI)</button>
+<div class="dropdown-menu dropdown-menu-end p-3" style="min-width:320px"><form method="post" action="{% url 'outreach:draft_for_company' company.pk %}">{% csrf_token %}
+<label class="form-label small">Template</label><select name="template" class="form-select form-select-sm mb-2"><option value="">Let the agent choose</option>{% for t in templates %}<option value="{{ t.pk }}">{{ t.name }}</option>{% endfor %}</select>
+<label class="form-label small">Contact</label><select name="contact" class="form-select form-select-sm mb-2">{% for ct in contacts %}{% if ct.email %}<option value="{{ ct.pk }}" {% if not ct.is_emailable %}disabled{% endif %}>{{ ct.display_name }} {% if not ct.is_emailable %}(not verified){% endif %}</option>{% endif %}{% endfor %}</select>
+<label class="form-label small">Extra instructions (optional)</label><textarea name="instructions" class="form-control form-control-sm mb-2" rows="2"></textarea>
+<button class="btn btn-sm btn-primary w-100">Generate draft for approval</button></form></div></div>
+<form method="post" action="{% url 'research:deep_dive' company.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-primary" title="AI OEM research on this company"><i class="bi bi-search"></i> OEM deep-dive</button></form>
+<a class="btn btn-sm btn-outline-secondary" href="{% url 'quotations:create_for_company' company.pk %}"><i class="bi bi-receipt"></i> Quotation</a>
+<a class="btn btn-sm btn-outline-secondary" href="{% url 'crm:company_edit' company.pk %}"><i class="bi bi-pencil"></i> Edit</a>
+<form method="post" action="{% url 'crm:company_flag' company.pk %}">{% csrf_token %}{% if company.do_not_contact %}<input type="hidden" name="action" value="allow_contact"><button class="btn btn-sm btn-outline-success">Allow contact</button>{% else %}<input type="hidden" name="action" value="do_not_contact"><button class="btn btn-sm btn-outline-danger" data-confirm="Stop all e-mails to this company?">Do not contact</button>{% endif %}</form>
+{% endif %}{% endblock %}
+{% block content %}
+<div class="card mb-3"><div class="card-body py-2 d-flex flex-wrap align-items-center gap-3">
+  <div><span class="text-muted small">Stage</span><br><span class="badge bg-{{ company.stage|stage_colour }} fs-6 {% if company.stage == 'lost' %}text-dark{% endif %}">{{ company.get_stage_display }}</span></div>
+  {% if user_can_edit %}<form method="post" action="{% url 'crm:company_stage' company.pk %}" class="d-flex gap-1 align-items-end">{% csrf_token %}
+    <select name="stage" class="form-select form-select-sm">{% for v, l in stages %}<option value="{{ v }}" {% if v == company.stage %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+    <input name="reason" class="form-control form-control-sm" placeholder="Reason (optional)"><button class="btn btn-sm btn-outline-primary">Set</button></form>{% endif %}
+  <div class="ms-md-auto small"><span class="text-muted">Owner</span> {% if company.owner %}{{ company.owner.get_full_name|default:company.owner.username }}{% else %}unassigned{% endif %} · <span class="text-muted">Source</span> {{ company.get_lead_source_display }} · <span class="text-muted">Last contact</span> {{ company.last_contacted_at|date:"d M Y"|default:"never" }} · <span class="text-muted">Last reply</span> {{ company.last_reply_at|date:"d M Y"|default:"—" }}</div>
+</div></div>
+
+<div class="row g-3">
+<div class="col-xl-4">
+  <div class="card mb-3"><div class="card-header">Profile</div><div class="card-body small">
+  <dl class="row mb-0">
+    <dt class="col-5">Business</dt><dd class="col-7">{{ company.get_business_type_display }}</dd>
+    <dt class="col-5">Industries</dt><dd class="col-7">{{ company.industry_labels|join:", "|default:"—" }}</dd>
+    <dt class="col-5">Existing brands</dt><dd class="col-7">{{ company.existing_brands|default:"—" }}</dd>
+    <dt class="col-5">Product range</dt><dd class="col-7">{{ company.product_range|default:"—"|linebreaksbr }}</dd>
+    <dt class="col-5">Potential OEM needs</dt><dd class="col-7">{{ company.potential_requirements|default:"—"|linebreaksbr }}</dd>
+    <dt class="col-5">Interested in</dt><dd class="col-7">{% for p in company.products_interested.all %}<span class="badge bg-light text-dark border">{{ p.name }}</span> {% empty %}—{% endfor %}</dd>
+    <dt class="col-5">Size</dt><dd class="col-7">{{ company.estimated_size|default:"not verified" }}{% if company.estimated_size_source %} <a href="{{ company.estimated_size_source }}" target="_blank" rel="noopener noreferrer">source</a>{% endif %}</dd>
+    <dt class="col-5">Phone</dt><dd class="col-7">{{ company.phone|default:"—" }}</dd>
+    <dt class="col-5">General e-mail</dt><dd class="col-7">{{ company.general_email|default:"—" }}</dd>
+    <dt class="col-5">Expected order</dt><dd class="col-7">{{ company.expected_order_quantity|default:"—" }}{% if company.expected_order_value %} · {{ company.expected_order_value|money:company.expected_value_currency }}{% endif %}</dd>
+    <dt class="col-5">Negotiation</dt><dd class="col-7">{{ company.negotiation_status|default:"—" }}</dd>
+    <dt class="col-5">Next action</dt><dd class="col-7">{{ company.next_action|default:"—" }} {{ company.next_action_date|date:"d M Y"|default:"" }}</dd>
+    {% if company.description %}<dt class="col-12 mt-2">Description</dt><dd class="col-12">{{ company.description|linebreaksbr }}</dd>{% endif %}
+    {% if company.notes %}<dt class="col-12 mt-2">Notes</dt><dd class="col-12">{{ company.notes|linebreaksbr }}</dd>{% endif %}
+  </dl></div></div>
+
+  <div class="card mb-3"><div class="card-header">OEM opportunity score: {{ company.oem_score }}/100 {% if company.research_confidence %}<span class="small text-muted">(confidence {{ company.research_confidence }})</span>{% endif %}</div><div class="card-body small">
+    {% if company.score_breakdown.signals %}<ul class="list-unstyled mb-2">{% for s in company.score_breakdown.signals %}<li><i class="bi {% if s.present %}bi-check-circle text-success{% else %}bi-dash-circle text-muted{% endif %}"></i> {{ s.label }} <span class="text-muted">(+{{ s.points }})</span>{% if s.evidence %}<div class="evidence ms-3">{{ s.evidence }}</div>{% endif %}</li>{% endfor %}</ul>{% else %}<span class="text-muted">Not scored yet (score is computed by the research agents from evidence).</span>{% endif %}
+    {% if company.fit_evidence %}<div class="evidence">{{ company.fit_evidence|linebreaksbr }}</div>{% endif %}
+  </div></div>
+
+  <div class="card mb-3"><div class="card-header">Sources &amp; evidence ({{ sources|length }})</div><ul class="list-group list-group-flush small">
+    {% for s in sources %}<li class="list-group-item"><a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">{{ s.title|default:s.url|truncatechars:70 }}</a> <span class="badge bg-light text-dark border">{{ s.get_kind_display }}</span>{% if s.verified_reachable %} <i class="bi bi-check2 text-success" title="Page reachable at verification"></i>{% elif s.verified_reachable is False %} <i class="bi bi-x text-danger" title="Page not reachable at verification"></i>{% endif %}{% if s.supports %}<div class="evidence mt-1">{{ s.supports|truncatechars:300 }}</div>{% endif %}</li>
+    {% empty %}<li class="list-group-item text-muted">No sources recorded.</li>{% endfor %}
+  </ul></div>
+</div>
+
+<div class="col-xl-8">
+  <div class="card mb-3"><div class="card-header d-flex align-items-center">Contacts {% if user_can_edit %}<a class="btn btn-sm btn-outline-primary ms-auto" href="{% url 'crm:contact_create' company.pk %}"><i class="bi bi-plus"></i> Add contact</a>{% endif %}</div>
+  <div class="table-responsive"><table class="table table-sm mb-0 align-middle"><thead><tr><th>Name / title</th><th>E-mail</th><th>Phone / WhatsApp</th><th>LinkedIn</th><th></th></tr></thead><tbody>
+  {% for ct in contacts %}<tr><td>{{ ct.full_name|default:"(generic address)" }}{% if ct.is_decision_maker %} <span class="badge bg-info text-dark">decision-maker</span>{% endif %}{% if ct.is_primary %} <span class="badge bg-light text-dark border">primary</span>{% endif %}<div class="small text-muted">{{ ct.title }}</div></td>
+  <td class="small">{{ ct.email|default:"—" }}{% if ct.email %}<br><span class="badge bg-{{ ct.email_status|email_status_colour }}">{{ ct.get_email_status_display }}</span>{% if ct.email_source_url %} <a href="{{ ct.email_source_url }}" target="_blank" rel="noopener noreferrer" class="small">source</a>{% endif %}{% endif %}{% if ct.unsubscribed_at %} <span class="badge bg-dark">unsubscribed</span>{% endif %}</td>
+  <td class="small">{{ ct.phone|default:"" }}{% if ct.whatsapp %}<br>WA {{ ct.whatsapp }}{% endif %}{% if ct.phone_source_url %} <a href="{{ ct.phone_source_url }}" target="_blank" rel="noopener noreferrer">source</a>{% endif %}</td>
+  <td class="small">{% if ct.linkedin_url %}<a href="{{ ct.linkedin_url }}" target="_blank" rel="noopener noreferrer">profile</a>{% endif %}</td>
+  <td class="text-nowrap">{% if user_can_edit %}<a class="btn btn-sm btn-link p-0" href="{% url 'crm:contact_edit' ct.pk %}">edit</a> <form class="d-inline" method="post" action="{% url 'crm:contact_delete' ct.pk %}">{% csrf_token %}<button class="btn btn-sm btn-link text-danger p-0" data-confirm="Delete this contact?">delete</button></form>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="5" class="text-muted small">No contacts yet.</td></tr>{% endfor %}
+  </tbody></table></div></div>
+
+  <ul class="nav nav-tabs" role="tablist">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#t-timeline" type="button">Timeline ({{ timeline|length }})</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-req" type="button">Requirements ({{ requirements|length }})</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-quot" type="button">Quotations ({{ quotations|length }})</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-fu" type="button">Follow-ups ({{ enrollments|length }})</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-hist" type="button">Stage history</button></li>
+  </ul>
+  <div class="tab-content card border-top-0 rounded-0 rounded-bottom mb-3"><div class="card-body">
+    <div class="tab-pane fade show active" id="t-timeline">
+      {% if user_can_edit %}<form method="post" action="{% url 'crm:activity_add' company.pk %}" class="row g-2 mb-3 align-items-end">{% csrf_token %}
+        <div class="col-md-2">{{ activity_form.kind }}</div><div class="col-md-2">{{ activity_form.contact }}</div><div class="col-md-3"><input name="subject" class="form-control form-control-sm" placeholder="Subject" maxlength="300"></div><div class="col-md-4"><input name="body" class="form-control form-control-sm" placeholder="Notes"></div><div class="col-md-1"><button class="btn btn-sm btn-outline-primary w-100">Log</button></div></form>{% endif %}
+      {% for item in timeline %}
+        <div class="d-flex gap-2 py-2 border-bottom">
+          <div class="text-muted small text-nowrap" style="width:110px">{{ item.at|date:"d M Y H:i" }}</div>
+          {% if item.type == "out" %}{% with e=item.obj %}<div><i class="bi bi-send text-primary"></i> <a href="{% url 'outreach:email_detail' e.pk %}">{{ e.subject }}</a> <span class="badge bg-{{ e.status|out_status_colour }}">{{ e.get_status_display }}</span> <span class="small text-muted">{{ e.get_kind_display }} → {{ e.to_email }}</span></div>{% endwith %}
+          {% elif item.type == "in" %}{% with e=item.obj %}<div><i class="bi bi-envelope-open text-success"></i> <a href="{% url 'mailbox:inbound_detail' e.pk %}">{{ e.subject|default:"(no subject)" }}</a> <span class="badge bg-light text-dark border">{{ e.get_classification_display }}</span> <span class="small text-muted">from {{ e.from_email }}</span>{% if e.summary %}<div class="small text-muted">{{ e.summary|truncatechars:200 }}</div>{% endif %}</div>{% endwith %}
+          {% else %}{% with a=item.obj %}<div><i class="bi bi-journal"></i> <b>{{ a.get_kind_display }}</b> {{ a.subject }} <span class="small text-muted">{{ a.user.username|default:a.agent }}</span>{% if a.body %}<div class="small">{{ a.body|linebreaksbr|truncatechars:400 }}</div>{% endif %}</div>{% endwith %}{% endif %}
+        </div>
+      {% empty %}<div class="text-muted small">No communication yet.</div>{% endfor %}
+    </div>
+    <div class="tab-pane fade" id="t-req">
+      {% if user_can_edit %}<a class="btn btn-sm btn-outline-primary mb-2" href="{% url 'crm:requirement_create' company.pk %}"><i class="bi bi-plus"></i> Add requirement</a>{% endif %}
+      <table class="table table-sm"><thead><tr><th>Requirement</th><th>Material / sizes</th><th>Quantity</th><th>Status</th><th></th></tr></thead><tbody>
+      {% for r in requirements %}<tr><td>{{ r.description|truncatechars:120 }}{% if r.created_by_agent %} <span class="badge bg-light text-dark border">AI-extracted</span>{% endif %}<div class="small text-muted">{{ r.product_category.name|default:"" }}</div></td><td class="small">{{ r.material }} {{ r.sizes }}</td><td class="small">{{ r.quantity }}</td><td>{{ r.get_status_display }}</td><td><a href="{% url 'crm:requirement_edit' r.pk %}" class="small">edit</a> · <a href="{% url 'quotations:create_for_company' company.pk %}?requirement={{ r.pk }}" class="small">quote</a></td></tr>
+      {% empty %}<tr><td colspan="5" class="text-muted small">No requirements recorded.</td></tr>{% endfor %}</tbody></table>
+    </div>
+    <div class="tab-pane fade" id="t-quot">
+      <table class="table table-sm"><thead><tr><th>Number</th><th>Status</th><th>Currency</th><th class="text-end">Total</th><th>Created</th></tr></thead><tbody>
+      {% for q in quotations %}<tr><td><a href="{% url 'quotations:detail' q.pk %}">{{ q.number }}</a></td><td>{{ q.get_status_display }}</td><td>{{ q.currency }}</td><td class="text-end">{{ q.total|money }}</td><td class="small">{{ q.created_at|date:"d M Y" }}</td></tr>
+      {% empty %}<tr><td colspan="5" class="text-muted small">No quotations.</td></tr>{% endfor %}</tbody></table>
+    </div>
+    <div class="tab-pane fade" id="t-fu">
+      <table class="table table-sm"><thead><tr><th>Contact</th><th>Sequence</th><th>Status</th><th>Steps done</th><th>Next due</th></tr></thead><tbody>
+      {% for en in enrollments %}<tr><td>{{ en.contact.display_name }}</td><td>{{ en.sequence.name }}</td><td>{{ en.get_status_display }}{% if en.stop_reason %} ({{ en.get_stop_reason_display }}){% endif %}</td><td>{{ en.last_step_done }}</td><td class="small">{{ en.next_due_at|date:"d M Y H:i"|default:"—" }}</td></tr>
+      {% empty %}<tr><td colspan="5" class="text-muted small">Not enrolled in a follow-up sequence (happens automatically after the first e-mail is sent).</td></tr>{% endfor %}</tbody></table>
+    </div>
+    <div class="tab-pane fade" id="t-hist">
+      <ul class="list-unstyled small mb-0">{% for h in stage_history %}<li>{{ h.changed_at|date:"d M Y H:i" }} · {{ h.get_from_stage_display|default:"—" }} → <b>{{ h.get_to_stage_display }}</b> · {{ h.changed_by.username|default:h.agent }} {% if h.reason %}<span class="text-muted">— {{ h.reason }}</span>{% endif %}</li>{% empty %}<li class="text-muted">No stage changes.</li>{% endfor %}</ul>
+    </div>
+  </div></div>
+
+  {% if tasks %}<div class="card"><div class="card-header">Open tasks</div><ul class="list-group list-group-flush">{% for t in tasks %}<li class="list-group-item d-flex small"><span class="badge bg-{% if t.priority == 'urgent' %}danger{% elif t.priority == 'high' %}warning text-dark{% else %}secondary{% endif %} me-2">{{ t.get_priority_display }}</span>{{ t.title }}<span class="ms-auto text-muted">{{ t.assigned_to.username|default:"unassigned" }} · {{ t.due_date|date:"d M" }}</span></li>{% endfor %}</ul></div>{% endif %}
+</div>
+</div>
+{% endblock %}

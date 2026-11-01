@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Categories{% endblock %}
+{% block page_title %}Product categories{% endblock %}
+{% block page_actions %}{% if user_is_manager %}<a class="btn btn-primary btn-sm" href="{% url 'products:category_create' %}"><i class="bi bi-plus"></i> New category</a>{% endif %}{% endblock %}
+{% block content %}
+<div class="card"><table class="table mb-0"><thead><tr><th>Category</th><th>Products</th><th>Description</th><th></th></tr></thead><tbody>
+{% for c in categories %}<tr><td><a href="{% url 'products:product_list' %}?category={{ c.pk }}">{{ c.name }}</a></td><td>{{ c.n }}</td><td class="small text-muted">{{ c.description }}</td><td>{% if user_is_manager %}<a href="{% url 'products:category_edit' c.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

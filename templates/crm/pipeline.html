@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% load app_tags %}
+{% block title %}Pipeline{% endblock %}
+{% block page_title %}Sales pipeline{% endblock %}
+{% block page_subtitle %}New lead → Payment received. {{ lost }} closed / not interested (hidden).{% endblock %}
+{% block content %}
+{% include "crm/_filters.html" with hide_stage=True %}
+<div class="kanban">
+{% for col in columns %}<div class="kanban-col"><h6><span>{{ col.label }}</span><span class="badge bg-secondary">{{ col.count }}</span></h6>
+  {% for c in col.companies %}<div class="kanban-card">
+    <a href="{{ c.get_absolute_url }}" class="fw-semibold">{{ c.name|truncatechars:34 }}</a>
+    <div class="small text-muted">{{ c.country.name|default:"" }}{% if c.oem_category %} · <span class="badge bg-{{ c.oem_category|category_colour }} {% if c.oem_category == 'E' %}text-dark{% endif %}">{{ c.oem_category }}</span>{% endif %}{% if c.expected_order_value %} · {{ c.expected_order_value|money:c.expected_value_currency }}{% endif %}</div>
+    {% if c.next_action %}<div class="small mt-1"><i class="bi bi-arrow-right-short"></i>{{ c.next_action|truncatechars:40 }}</div>{% endif %}
+    {% if user_can_edit %}<form method="post" action="{% url 'crm:company_stage' c.pk %}" class="mt-1">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <select name="stage" class="form-select form-select-sm py-0" onchange="this.form.submit()">{% for v, l in stages %}<option value="{{ v }}" {% if v == c.stage %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></form>{% endif %}
+  </div>{% empty %}<div class="small text-muted px-1">—</div>{% endfor %}
+  {% if col.count > 25 %}<a class="small" href="{% url 'crm:company_list' %}?stage={{ col.value }}">+{{ col.count|add:"-25" }} more</a>{% endif %}
+</div>{% endfor %}
+</div>
+{% endblock %}

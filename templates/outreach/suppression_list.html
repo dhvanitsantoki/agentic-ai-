@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Suppression list{% endblock %}
+{% block page_title %}Suppression list{% endblock %}
+{% block page_subtitle %}Addresses and domains that are never e-mailed: unsubscribes, hard bounces, declines and manual blocks.{% endblock %}
+{% block content %}
+{% if user_can_edit %}<div class="card mb-3"><div class="card-body"><form method="post" action="{% url 'outreach:suppression_add' %}" class="row g-2 align-items-end">{% csrf_token %}
+<div class="col-md-3"><label class="form-label small">E-mail</label>{{ form.email }}</div><div class="col-md-3"><label class="form-label small">or domain</label>{{ form.domain }}</div><div class="col-md-2"><label class="form-label small">Reason</label>{{ form.reason }}</div><div class="col-md-3"><label class="form-label small">Note</label>{{ form.note }}</div><div class="col-md-1"><button class="btn btn-sm btn-primary w-100">Add</button></div></form></div></div>{% endif %}
+<form class="mb-2" method="get"><input name="q" value="{{ q }}" class="form-control form-control-sm" style="max-width:300px" placeholder="Search"></form>
+<div class="card"><table class="table table-sm mb-0"><thead><tr><th>E-mail / domain</th><th>Reason</th><th>Note</th><th>Added</th><th></th></tr></thead><tbody>
+{% for s in page_obj %}<tr><td>{{ s.email|default:"" }}{% if s.domain %}@{{ s.domain }}{% endif %}</td><td>{{ s.get_reason_display }}</td><td class="small">{{ s.note }}</td><td class="small">{{ s.created_at|date:"d M Y" }} {{ s.created_by.username|default:"" }}</td>
+<td>{% if user_is_manager and s.reason != 'unsubscribe' and s.reason != 'complaint' %}<form method="post" action="{% url 'outreach:suppression_remove' s.pk %}">{% csrf_token %}<button class="btn btn-sm btn-link text-danger p-0" data-confirm="Allow e-mails to this address again?">remove</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5" class="text-muted small">Empty.</td></tr>{% endfor %}</tbody></table></div>
+{% include "partials/pagination.html" %}
+{% endblock %}

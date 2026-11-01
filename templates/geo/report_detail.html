@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ report.country.name }} market report{% endblock %}
+{% block page_title %}{{ report.country.name }} — market report{% endblock %}
+{% block page_subtitle %}{{ report.created_at|date:"d M Y" }} · {% if report.generated_by_ai %}AI-generated{% else %}Manual{% endif %} · {{ report.get_status_display }}{% if report.reviewed_by %} by {{ report.reviewed_by }} {{ report.reviewed_at|date:"d M Y" }}{% endif %}{% endblock %}
+{% block page_actions %}{% if user_is_manager %}{% if report.status == 'draft' %}<form method="post" action="{% url 'geo:report_review' report.pk %}">{% csrf_token %}<button class="btn btn-sm btn-success">Mark reviewed</button></form>{% endif %}
+<form method="post" action="{% url 'geo:report_review' report.pk %}">{% csrf_token %}<input type="hidden" name="action" value="archive"><button class="btn btn-sm btn-outline-secondary">Archive</button></form>{% endif %}
+<a class="btn btn-sm btn-outline-secondary" href="{% url 'geo:country_detail' report.country.iso2 %}">Back to {{ report.country.name }}</a>{% endblock %}
+{% block content %}
+{% if report.status == 'draft' and report.generated_by_ai %}<div class="alert alert-warning py-2 small">AI-generated and not yet reviewed. Check the sources before relying on it.</div>{% endif %}
+<div class="row g-3"><div class="col-lg-8"><div class="card"><div class="card-body">
+<div class="mb-3"><span class="badge bg-light text-dark border fs-6">Demand: {{ report.get_demand_level_display }}</span> <span class="badge bg-{% if report.confidence == 'high' %}success{% elif report.confidence == 'medium' %}primary{% else %}secondary{% endif %} fs-6">Confidence: {{ report.get_confidence_display }}</span></div>
+<h6>Summary</h6><p>{{ report.summary|linebreaksbr|default:"—" }}</p>
+<h6>Demand assessment</h6><p>{{ report.demand_assessment|linebreaksbr|default:"—" }}</p>
+<h6>Buyer types seen</h6><p>{{ report.buyer_types|linebreaksbr|default:"—" }}</p>
+<h6>Import requirements</h6><p>{{ report.import_requirements|linebreaksbr|default:"—" }}</p>
+<h6>Relevant standards</h6><p>{{ report.relevant_standards|linebreaksbr|default:"—" }}</p>
+<h6>Competitors</h6><p>{{ report.competitors|linebreaksbr|default:"—" }}</p>
+<h6>Opportunities</h6><p>{{ report.opportunities|linebreaksbr|default:"—" }}</p>
+<h6>Risks</h6><p class="mb-0">{{ report.risks|linebreaksbr|default:"—" }}</p>
+</div></div></div>
+<div class="col-lg-4"><div class="card"><div class="card-header">Sources ({{ report.sources|length }})</div><ul class="list-group list-group-flush small">
+{% for s in report.sources %}<li class="list-group-item"><a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">{{ s.title|default:s.url|truncatechars:60 }}</a>{% if s.supports %}<div class="evidence mt-1">{{ s.supports }}</div>{% endif %}{% if s.seen_by_search is False %}<div class="text-danger">not returned by the search tool – verify manually</div>{% endif %}</li>
+{% empty %}<li class="list-group-item text-muted">No sources.</li>{% endfor %}</ul></div></div></div>
+{% endblock %}

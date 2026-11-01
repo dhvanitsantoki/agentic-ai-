@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Country markets{% endblock %}
+{% block page_title %}Global export markets{% endblock %}
+{% block page_subtitle %}Country-wise buyer database and market research. Demand is never assumed — each report shows its evidence and confidence.{% endblock %}
+{% block page_actions %}
+<form class="d-flex gap-1" method="get" action="" onsubmit="if(this.c.value){window.location='/geo/country/'+this.c.value+'/';} return false;">
+<select name="c" class="form-select form-select-sm" style="max-width:230px"><option value="">Open any country…</option>{% for c in all_countries %}<option value="{{ c.iso2 }}">{{ c.name }}</option>{% endfor %}</select><button class="btn btn-sm btn-outline-primary">Go</button></form>
+{% if user_can_edit %}<a class="btn btn-sm btn-primary" href="{% url 'research:run_create' %}"><i class="bi bi-search"></i> New research run</a>{% endif %}
+{% endblock %}
+{% block content %}
+<ul class="nav nav-pills mb-3 flex-wrap">
+  <li class="nav-item"><a class="nav-link {% if not continent %}active{% endif %}" href="?show={{ show }}">All continents</a></li>
+  {% for c in continents %}<li class="nav-item"><a class="nav-link {% if continent == c.code %}active{% endif %}" href="?continent={{ c.code }}&show={{ show }}">{{ c.name }} <span class="badge bg-light text-dark">{{ c.n }}</span></a></li>{% endfor %}
+  <li class="nav-item ms-auto"><a class="nav-link" href="?continent={{ continent }}&show={% if show == 'active' %}all{% else %}active{% endif %}">{% if show == 'active' %}Show all countries{% else %}Only countries with activity{% endif %}</a></li>
+</ul>
+<div class="card"><div class="table-responsive"><table class="table table-hover table-sm mb-0 align-middle"><thead><tr><th>Country</th><th>Continent</th><th>Companies</th><th>A</th><th>B</th><th>Contacted</th><th>Replied</th><th>Market reports</th><th>Last researched</th></tr></thead><tbody>
+{% for c in countries %}<tr><td><a href="{% url 'geo:country_detail' c.iso2 %}">{{ c.name }}</a>{% if c.is_priority %} <i class="bi bi-star-fill text-warning" title="In nightly research rotation"></i>{% endif %}</td><td class="small">{{ c.continent.name }}</td><td>{{ c.n_companies }}</td><td>{{ c.n_a }}</td><td>{{ c.n_b }}</td><td>{{ c.n_contacted }}</td><td>{{ c.n_replied }}</td><td>{{ c.n_reports }}</td><td class="small">{{ c.last_researched_at|date:"d M Y"|default:"—" }}</td></tr>
+{% empty %}<tr><td colspan="9">{% include "partials/empty.html" with message="No market activity yet. Mark priority countries or start a research run." %}</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

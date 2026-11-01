@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Tasks{% endblock %}
+{% block page_title %}Tasks{% endblock %}
+{% block page_subtitle %}Escalations from the AI agents and the team's own to-dos.{% endblock %}
+{% block content %}
+<div class="d-flex gap-2 mb-3 flex-wrap">
+  <div class="btn-group btn-group-sm">
+    <a class="btn btn-outline-primary {% if scope == 'mine' %}active{% endif %}" href="?scope=mine">My tasks</a>
+    <a class="btn btn-outline-primary {% if scope == 'all' %}active{% endif %}" href="?scope=all">All</a>
+    <a class="btn btn-outline-primary {% if scope == 'unassigned' %}active{% endif %}" href="?scope=unassigned">Unassigned</a></div>
+  <a class="btn btn-sm btn-outline-secondary" href="?scope={{ scope }}&show={% if show == 'done' %}{% else %}done{% endif %}">{% if show == 'done' %}Hide completed{% else %}Include completed{% endif %}</a>
+</div>
+{% if user_can_edit %}<div class="card mb-3"><div class="card-body"><form method="post" action="{% url 'crm:task_create' %}" class="row g-2 align-items-end">{% csrf_token %}
+<div class="col-md-3"><label class="form-label small">Task</label>{{ form.title }}</div><div class="col-md-3"><label class="form-label small">Company</label>{{ form.company }}</div><div class="col-md-2"><label class="form-label small">Assign to</label>{{ form.assigned_to }}</div><div class="col-md-1"><label class="form-label small">Priority</label>{{ form.priority }}</div><div class="col-md-2"><label class="form-label small">Due</label>{{ form.due_date }}</div><div class="col-md-1"><button class="btn btn-sm btn-primary w-100">Add</button></div></form></div></div>{% endif %}
+<div class="card"><div class="table-responsive"><table class="table table-sm mb-0 align-middle"><thead><tr><th></th><th>Task</th><th>Company</th><th>Type</th><th>Priority</th><th>Assigned</th><th>Due</th></tr></thead><tbody>
+{% for t in page_obj %}<tr class="{% if t.done %}text-muted text-decoration-line-through{% endif %}">
+<td>{% if user_can_edit %}<form method="post" action="{% url 'crm:task_done' t.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn btn-sm btn-link p-0" title="Toggle done"><i class="bi {% if t.done %}bi-check-square{% else %}bi-square{% endif %}"></i></button></form>{% endif %}</td>
+<td>{% if t.link %}<a href="{{ t.link }}">{{ t.title }}</a>{% else %}{{ t.title }}{% endif %}{% if t.details %}<div class="small text-muted">{{ t.details|truncatechars:160 }}</div>{% endif %}</td>
+<td class="small">{% if t.company %}<a href="{{ t.company.get_absolute_url }}">{{ t.company.name }}</a>{% endif %}</td><td class="small">{{ t.get_kind_display }}{% if t.created_by_agent %} <span class="badge bg-light text-dark border">{{ t.created_by_agent }}</span>{% endif %}</td>
+<td><span class="badge bg-{% if t.priority == 'urgent' %}danger{% elif t.priority == 'high' %}warning text-dark{% else %}secondary{% endif %}">{{ t.get_priority_display }}</span></td>
+<td class="small">{{ t.assigned_to.username|default:"—" }}</td><td class="small {% if not t.done and t.due_date and t.due_date < today %}text-danger fw-semibold{% endif %}">{{ t.due_date|date:"d M Y"|default:"—" }}</td></tr>
+{% empty %}<tr><td colspan="7">{% include "partials/empty.html" with message="No tasks." %}</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% include "partials/pagination.html" %}
+{% endblock %}

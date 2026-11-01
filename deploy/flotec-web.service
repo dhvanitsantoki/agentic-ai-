@@ -1,0 +1,17 @@
+[Unit]
+Description=Flotec Sales AI - web (gunicorn)
+After=network.target postgresql.service
+
+[Service]
+User=flotec
+Group=flotec
+WorkingDirectory=/srv/flotec/app
+EnvironmentFile=/srv/flotec/app/.env
+ExecStart=/srv/flotec/app/.venv/bin/gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 120 --access-logfile - --error-logfile -
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

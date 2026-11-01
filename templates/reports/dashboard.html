@@ -1,0 +1,44 @@
+{% extends "base.html" %}{% load static app_tags %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Export &amp; OEM sales dashboard{% endblock %}
+{% block page_subtitle %}{{ today|date:"l, d F Y" }} · last 7 days unless stated{% endblock %}
+{% block page_actions %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'reports:list' %}"><i class="bi bi-graph-up"></i> Reports</a>{% if user_can_edit %}<a class="btn btn-sm btn-primary" href="{% url 'research:run_create' %}"><i class="bi bi-search"></i> Find buyers</a>{% endif %}{% endblock %}
+{% block content %}
+{% if setup_missing %}<div class="alert alert-info py-2"><b>Setup:</b> {{ setup_missing|join:" · " }} — see <a href="{% url 'core:settings_home' %}">Settings</a>.</div>{% endif %}
+{% if sys.automation_state == 'stopped' %}<div class="alert alert-dark py-2"><i class="bi bi-stop-circle"></i> Automation is <b>stopped</b>. No agent runs and nothing is sent until it is resumed in <a class="link-light" href="{% url 'agents:control' %}">Automation</a>.</div>{% endif %}
+<div class="row g-3 mb-3">
+  {% with w=week %}
+  <div class="col-6 col-md-4 col-xl-2"><div class="card kpi h-100"><div class="card-body"><div class="label">New companies</div><div class="value">{{ w.new_companies }}</div><div class="small text-muted">{{ w.new_companies_ai }} by AI · today {{ today_m.new_companies }}</div></div></div></div>
+  <div class="col-6 col-md-4 col-xl-2"><div class="card kpi h-100"><div class="card-body"><div class="label">Verified buyers</div><div class="value">{{ w.verified_buyers }}</div><div class="small text-muted">{{ w.research_runs }} research runs</div></div></div></div>
+  <div class="col-6 col-md-4 col-xl-2"><div class="card kpi h-100"><div class="card-body"><div class="label">E-mails sent</div><div class="value">{{ w.emails_sent }}</div><div class="small text-muted">{{ w.emails_bounced }} bounced · {{ w.followups_sent }} follow-ups</div></div></div></div>
+  <div class="col-6 col-md-4 col-xl-2"><div class="card kpi h-100"><div class="card-body"><div class="label">Replies</div><div class="value text-primary">{{ w.replies_received }}</div><div class="small text-muted">{{ w.interested }} interested</div></div></div></div>
+  <div class="col-6 col-md-4 col-xl-2"><div class="card kpi h-100"><div class="card-body"><div class="label">Quotations</div><div class="value">{{ w.quotations_requested }} / {{ w.quotations_sent }}</div><div class="small text-muted">requested / sent</div></div></div></div>
+  <div class="col-6 col-md-4 col-xl-2"><div class="card kpi h-100"><div class="card-body"><div class="label">Orders confirmed</div><div class="value text-success">{{ w.orders_confirmed }}</div><div class="small text-muted">{{ w.meetings_logged }} meetings logged</div></div></div></div>
+  {% endwith %}
+</div>
+<div class="row g-3 mb-3">
+  <div class="col-lg-8"><div class="card h-100"><div class="card-header">Activity – last 30 days</div><div class="card-body"><canvas id="activityChart" height="110"></canvas></div></div></div>
+  <div class="col-lg-4"><div class="card h-100"><div class="card-header">Needs a decision</div><ul class="list-group list-group-flush small">
+    <li class="list-group-item d-flex"><a href="{% url 'outreach:approval_queue' %}">E-mails waiting for approval</a><span class="ms-auto badge bg-{% if week.pending_email_approvals %}danger{% else %}secondary{% endif %}">{{ week.pending_email_approvals }}</span></li>
+    <li class="list-group-item d-flex"><a href="{% url 'quotations:list' %}?status=pending_approval">Quotations waiting for approval</a><span class="ms-auto badge bg-{% if week.pending_quotation_approvals %}danger{% else %}secondary{% endif %}">{{ week.pending_quotation_approvals }}</span></li>
+    <li class="list-group-item d-flex"><a href="{% url 'quotations:list' %}?status=needs_input">Quotations needing input</a><span class="ms-auto badge bg-{% if week.quotations_needing_input %}warning text-dark{% else %}secondary{% endif %}">{{ week.quotations_needing_input }}</span></li>
+    <li class="list-group-item d-flex"><a href="{% url 'followups:enrollment_list' %}?due=1">Follow-ups due now</a><span class="ms-auto badge bg-secondary">{{ followups_due }}</span></li>
+    <li class="list-group-item d-flex"><a href="{% url 'crm:task_list' %}?scope=all">Overdue tasks</a><span class="ms-auto badge bg-{% if week.tasks_open_overdue %}warning text-dark{% else %}secondary{% endif %}">{{ week.tasks_open_overdue }}</span></li>
+    <li class="list-group-item d-flex"><a href="{% url 'agents:run_log' %}?status=failed">Agent errors (7 days)</a><span class="ms-auto badge bg-{% if week.agent_errors %}danger{% else %}secondary{% endif %}">{{ week.agent_errors }}</span></li>
+    <li class="list-group-item d-flex"><span>AI spend this month</span><span class="ms-auto">${{ spend|floatformat:2 }} / ${{ sys.monthly_ai_budget_usd }}</span></li>
+  </ul></div></div>
+</div>
+<div class="row g-3 mb-3">
+  <div class="col-lg-5"><div class="card h-100"><div class="card-header">Pipeline</div><div class="card-body"><canvas id="funnelChart" height="220"></canvas></div></div></div>
+  <div class="col-lg-3"><div class="card h-100"><div class="card-header">Lead quality (OEM category)</div><ul class="list-group list-group-flush small">{% for k, label in quality_labels.items %}<li class="list-group-item d-flex"><span class="badge bg-{{ k|category_colour }} {% if k == 'E' %}text-dark{% endif %} me-2">{{ k }}</span>{{ label|slice:"4:" }}<span class="ms-auto">{{ quality|get_item:k|default:0 }}</span></li>{% endfor %}</ul>
+    <div class="card-header border-top">Open pipeline value</div><div class="card-body small">{% for cur, v in week.open_pipeline_value.items %}<div>{{ v|money:cur }}</div>{% empty %}<span class="text-muted">No expected values entered.</span>{% endfor %}<div class="text-muted">{{ week.open_pipeline_companies }} open opportunities</div></div></div></div>
+  <div class="col-lg-4"><div class="card h-100"><div class="card-header">Top countries</div><table class="table table-sm mb-0"><thead><tr><th>Country</th><th>Companies</th><th>Replied</th></tr></thead><tbody>{% for c in top_countries %}<tr><td>{{ c.country__name }}</td><td>{{ c.n }}</td><td>{{ c.replied }}</td></tr>{% empty %}<tr><td colspan="3" class="text-muted small">No data yet.</td></tr>{% endfor %}</tbody></table></div></div>
+</div>
+<div class="row g-3">
+  <div class="col-lg-4"><div class="card h-100"><div class="card-header">Hot opportunities</div><ul class="list-group list-group-flush small">{% for c in hot %}<li class="list-group-item"><a href="{{ c.get_absolute_url }}">{{ c.name }}</a> <span class="badge bg-{{ c.stage|stage_colour }}">{{ c.get_stage_display }}</span><div class="text-muted">{{ c.country.name|default:"" }}{% if c.next_action %} · {{ c.next_action|truncatechars:50 }}{% endif %}</div></li>{% empty %}<li class="list-group-item text-muted">None yet.</li>{% endfor %}</ul></div></div>
+  <div class="col-lg-4"><div class="card h-100"><div class="card-header">Latest replies</div><ul class="list-group list-group-flush small">{% for e in recent_replies %}<li class="list-group-item"><a href="{% url 'mailbox:inbound_detail' e.pk %}">{{ e.subject|default:"(no subject)"|truncatechars:50 }}</a> <span class="badge bg-light text-dark border">{{ e.get_classification_display }}</span><div class="text-muted">{{ e.company.name|default:e.from_email }} · {{ e.received_at|timesince }} ago</div></li>{% empty %}<li class="list-group-item text-muted">No replies yet.</li>{% endfor %}</ul></div></div>
+  <div class="col-lg-4"><div class="card h-100"><div class="card-header">My tasks</div><ul class="list-group list-group-flush small">{% for t in my_tasks %}<li class="list-group-item">{% if t.link %}<a href="{{ t.link }}">{{ t.title|truncatechars:60 }}</a>{% else %}{{ t.title|truncatechars:60 }}{% endif %}<div class="text-muted">{{ t.get_priority_display }} · due {{ t.due_date|date:"d M"|default:"—" }}</div></li>{% empty %}<li class="list-group-item text-muted">No open tasks.</li>{% endfor %}</ul></div></div>
+</div>
+{{ series_json|json_script:"series-data" }}{{ funnel_json|json_script:"funnel-data" }}
+{% endblock %}
+{% block extra_js %}<script src="{% static 'vendor/chart.umd.js' %}"></script><script src="{% static 'js/dashboard.js' %}"></script>{% endblock %}

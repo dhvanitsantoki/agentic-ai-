@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block page_title %}Management reports{% endblock %}
+{% block page_subtitle %}Daily, weekly and monthly snapshots (generated automatically by the schedule).{% endblock %}
+{% block content %}
+{% if user_is_manager %}<div class="card mb-3"><div class="card-body"><form method="post" action="{% url 'reports:generate' %}" class="d-flex flex-wrap gap-3 align-items-end">{% csrf_token %}
+<div><label class="form-label small">Period</label><select name="period" class="form-select form-select-sm">{% for v, l in periods %}<option value="{{ v }}">{{ l }} (last complete)</option>{% endfor %}</select></div>
+<div class="form-check"><input class="form-check-input" type="checkbox" name="narrative" value="1" id="n"><label class="form-check-label small" for="n">AI summary</label></div>
+<div class="form-check"><input class="form-check-input" type="checkbox" name="email" value="1" id="e"><label class="form-check-label small" for="e">E-mail to report recipients</label></div>
+<button class="btn btn-sm btn-primary">Generate now</button></form></div></div>{% endif %}
+<div class="btn-group btn-group-sm mb-2"><a class="btn btn-outline-primary {% if not period %}active{% endif %}" href="?">All</a>{% for v, l in periods %}<a class="btn btn-outline-primary {% if period == v %}active{% endif %}" href="?period={{ v }}">{{ l }}</a>{% endfor %}</div>
+<div class="card"><table class="table table-sm mb-0 align-middle"><thead><tr><th>Period</th><th>From</th><th>To</th><th>New cos.</th><th>Sent</th><th>Replies</th><th>Quotes sent</th><th>Orders</th><th>Generated</th><th></th></tr></thead><tbody>
+{% for r in page_obj %}<tr><td><a href="{% url 'reports:detail' r.pk %}">{{ r.get_period_display }}</a></td><td>{{ r.start }}</td><td>{{ r.end }}</td><td>{{ r.metrics.new_companies }}</td><td>{{ r.metrics.emails_sent }}</td><td>{{ r.metrics.replies_received }}</td><td>{{ r.metrics.quotations_sent }}</td><td>{{ r.metrics.orders_confirmed }}</td><td class="small">{{ r.generated_at|date:"d M H:i" }}</td>
+<td class="text-nowrap"><a class="btn btn-sm btn-outline-success" href="{% url 'reports:export' r.pk 'xlsx' %}">Excel</a> <a class="btn btn-sm btn-outline-danger" href="{% url 'reports:export' r.pk 'pdf' %}">PDF</a></td></tr>
+{% empty %}<tr><td colspan="10">{% include "partials/empty.html" with message="No reports yet." %}</td></tr>{% endfor %}</tbody></table></div>
+{% include "partials/pagination.html" %}
+{% endblock %}

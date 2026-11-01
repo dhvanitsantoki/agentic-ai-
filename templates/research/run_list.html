@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Research runs{% endblock %}
+{% block page_title %}Research runs{% endblock %}
+{% block page_subtitle %}Agents 1 &amp; 2 and country research. Each run shows its cost, findings and verification results.{% endblock %}
+{% block page_actions %}{% if user_can_edit %}<a class="btn btn-sm btn-primary" href="{% url 'research:run_create' %}"><i class="bi bi-plus"></i> New research run</a>{% endif %}{% endblock %}
+{% block content %}
+<div class="btn-group btn-group-sm mb-3"><a class="btn btn-outline-primary {% if not kind %}active{% endif %}" href="?">All</a>{% for v, l in kinds %}<a class="btn btn-outline-primary {% if kind == v %}active{% endif %}" href="?kind={{ v }}">{{ l }}</a>{% endfor %}</div>
+<div class="card"><div class="table-responsive"><table class="table table-hover table-sm mb-0 align-middle"><thead><tr><th>#</th><th>Type</th><th>Target</th><th>Status</th><th>Found</th><th>Added</th><th>Dupl.</th><th>Review</th><th>Verified e-mails</th><th>Cost</th><th>Started by</th><th>Created</th></tr></thead><tbody>
+{% for r in page_obj %}<tr><td><a href="{% url 'research:run_detail' r.pk %}">{{ r.pk }}</a></td><td class="small">{{ r.get_kind_display }}</td><td class="small">{% if r.company %}{{ r.company.name }}{% else %}{{ r.country_names|truncatechars:50|default:"—" }}{% endif %}</td>
+<td><span class="badge bg-{% if r.status == 'completed' %}success{% elif r.status == 'failed' %}danger{% elif r.status == 'running' %}primary{% else %}secondary{% endif %}">{{ r.get_status_display }}</span></td>
+<td>{{ r.found_count }}</td><td>{{ r.added_count }}</td><td>{{ r.duplicate_count }}</td><td>{{ r.review_count }}</td><td>{{ r.verified_contacts }}</td><td class="small">${{ r.cost_usd|floatformat:2 }}</td>
+<td class="small">{% if r.triggered_by_schedule %}<span class="badge bg-light text-dark border">schedule</span>{% else %}{{ r.triggered_by.username|default:"—" }}{% endif %}</td><td class="small">{{ r.created_at|date:"d M H:i" }}</td></tr>
+{% empty %}<tr><td colspan="12">{% include "partials/empty.html" with message="No research yet." %}</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% include "partials/pagination.html" %}
+{% endblock %}

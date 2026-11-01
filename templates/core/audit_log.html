@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Audit log{% endblock %}
+{% block page_title %}Audit log{% endblock %}
+{% block content %}
+<form class="mb-3 d-flex gap-2" method="get"><input class="form-control form-control-sm" style="max-width:280px" name="action" value="{{ action }}" placeholder="Filter by action (e.g. email.sent)"><button class="btn btn-sm btn-outline-primary">Filter</button></form>
+<div class="card"><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Time</th><th>Who</th><th>Action</th><th>Object</th><th>Summary</th></tr></thead><tbody>
+{% for a in page_obj %}<tr><td class="text-nowrap">{{ a.created_at|date:"Y-m-d H:i" }}</td><td>{% if a.user %}{{ a.user.username }}{% else %}<span class="badge bg-secondary">{{ a.agent|default:"system" }}</span>{% endif %}</td><td><code>{{ a.action }}</code></td><td class="small">{{ a.object_type }} {{ a.object_id }}</td><td class="small">{{ a.summary }}</td></tr>
+{% empty %}<tr><td colspan="5">{% include "partials/empty.html" %}</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% include "partials/pagination.html" %}
+{% endblock %}

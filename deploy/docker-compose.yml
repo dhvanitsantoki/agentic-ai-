@@ -1,0 +1,38 @@
+# Usage (from the project root):  docker compose -f deploy/docker-compose.yml up -d --build
+services:
+  db:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_DB: flotec
+      POSTGRES_USER: flotec
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes: [pgdata:/var/lib/postgresql/data]
+  web:
+    build: {context: .., dockerfile: deploy/Dockerfile}
+    restart: always
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://flotec:${POSTGRES_PASSWORD}@db:5432/flotec
+      MEDIA_ROOT: /data/media
+      BACKUP_DIR: /data/backups
+      LOG_DIR: /data/logs
+    volumes: [appdata:/data]
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on: [db]
+    command: sh -c "python manage.py migrate --noinput && python manage.py setup_initial_data && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120"
+  worker:
+    build: {context: .., dockerfile: deploy/Dockerfile}
+    restart: always
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://flotec:${POSTGRES_PASSWORD}@db:5432/flotec
+      MEDIA_ROOT: /data/media
+      BACKUP_DIR: /data/backups
+      LOG_DIR: /data/logs
+    volumes: [appdata:/data]
+    depends_on: [db, web]
+    command: python manage.py run_worker --sleep 15
+volumes:
+  pgdata:
+  appdata:

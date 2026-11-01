@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Products{% endblock %}
+{% block page_title %}Product database{% endblock %}
+{% block page_subtitle %}Verified Flotec products, sizes and documents. Only verified products are used by the AI agents.{% endblock %}
+{% block page_actions %}
+<a class="btn btn-outline-secondary btn-sm" href="{% url 'products:category_list' %}"><i class="bi bi-tags"></i> Categories</a>
+{% if user_can_edit %}<a class="btn btn-primary btn-sm" href="{% url 'products:product_create' %}"><i class="bi bi-plus"></i> New product</a>{% endif %}
+{% endblock %}
+{% block content %}
+<form class="card card-body mb-3 py-2" method="get"><div class="row g-2 align-items-end">
+  <div class="col-md-3"><input class="form-control form-control-sm" name="q" value="{{ filters.q }}" placeholder="Search name, code or SKU"></div>
+  <div class="col-md-3"><select class="form-select form-select-sm" name="category"><option value="">All categories</option>{% for c in categories %}<option value="{{ c.pk }}" {% if filters.category == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.name }} ({{ c.n }})</option>{% endfor %}</select></div>
+  <div class="col-md-2"><select class="form-select form-select-sm" name="material"><option value="">All materials</option>{% for v, l in materials %}<option value="{{ v }}" {% if filters.material == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+  <div class="col-md-2"><select class="form-select form-select-sm" name="verified"><option value="">Verified + unverified</option><option value="1" {% if filters.verified == '1' %}selected{% endif %}>Verified only</option><option value="0" {% if filters.verified == '0' %}selected{% endif %}>Unverified only</option></select></div>
+  <div class="col-md-2"><button class="btn btn-sm btn-outline-primary w-100">Filter</button></div>
+</div></form>
+<div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle"><thead><tr><th>Product</th><th>Category</th><th>Material</th><th>Sizes</th><th>Pressure</th><th>MOQ</th><th>Sample</th><th>Status</th></tr></thead><tbody>
+{% for p in page_obj %}<tr>
+  <td><a href="{% url 'products:product_detail' p.pk %}" class="fw-semibold">{{ p.name }}</a>{% if p.model_code %}<div class="small text-muted">{{ p.model_code }}</div>{% endif %}</td>
+  <td>{{ p.category.name }}</td><td>{{ p.material }}</td><td class="small">{{ p.available_sizes|default:"—" }} <span class="text-muted">({{ p.n_variants }} SKUs)</span></td>
+  <td class="small">{{ p.pressure_rating|default:"—" }}</td><td>{{ p.default_moq|default:"—" }}</td><td>{{ p.sample_available|yesno:"Yes,No" }}</td>
+  <td>{% if p.is_verified %}<span class="badge bg-success">Verified</span>{% else %}<span class="badge bg-warning text-dark">Not verified</span>{% endif %}{% if not p.is_active %} <span class="badge bg-secondary">Inactive</span>{% endif %}</td>
+</tr>{% empty %}<tr><td colspan="8">{% include "partials/empty.html" with message="No products yet. Add Flotec products with verified specifications to enable quotations and product-specific outreach." %}</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% include "partials/pagination.html" %}
+{% endblock %}

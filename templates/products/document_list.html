@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Catalogues & files{% endblock %}
+{% block page_title %}Catalogues &amp; documents{% endblock %}
+{% block page_subtitle %}Only documents approved for sending can be attached to e-mails by the agents.{% endblock %}
+{% block page_actions %}{% if user_can_edit %}<a class="btn btn-primary btn-sm" href="{% url 'products:document_create' %}"><i class="bi bi-upload"></i> Upload document</a>{% endif %}{% endblock %}
+{% block content %}
+<div class="card"><div class="table-responsive"><table class="table mb-0 align-middle"><thead><tr><th>Title</th><th>Type</th><th>Categories / products</th><th>Sending</th><th>Uploaded</th><th></th></tr></thead><tbody>
+{% for d in documents %}<tr><td><a href="{{ d.file.url }}" target="_blank">{{ d.title }}</a><div class="small text-muted">{{ d.filename }}</div></td><td>{{ d.get_kind_display }}</td>
+<td class="small">{% for c in d.categories.all %}<span class="badge bg-light text-dark border">{{ c.name }}</span> {% endfor %}{% for p in d.products.all %}<span class="badge bg-light text-primary border">{{ p.name }}</span> {% endfor %}</td>
+<td>{% if d.approved_for_sending %}<span class="badge bg-success">Approved</span>{% else %}<span class="badge bg-secondary">Internal</span>{% endif %}</td>
+<td class="small">{{ d.uploaded_at|date:"d M Y" }}{% if d.uploaded_by %} · {{ d.uploaded_by }}{% endif %}</td>
+<td class="text-nowrap">{% if user_can_edit %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'products:document_edit' d.pk %}">Edit</a>{% endif %}
+{% if user_is_manager %}<form class="d-inline" method="post" action="{% url 'products:document_delete' d.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-danger" data-confirm="Delete this document?">Delete</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6">{% include "partials/empty.html" with message="Upload the Flotec catalogue and technical sheets so the agents can send them when buyers ask." %}</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

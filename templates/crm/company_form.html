@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{% if company %}Edit {{ company.name }}{% else %}New company{% endif %}{% endblock %}
+{% block page_title %}{% if company %}Edit {{ company.name }}{% else %}New company{% endif %}{% endblock %}
+{% block content %}
+{% if duplicate %}<div class="alert alert-warning">Possible duplicate: <a href="{{ duplicate.get_absolute_url }}">{{ duplicate.name }}</a> ({{ duplicate.domain|default:duplicate.country }}).</div>{% endif %}
+<div class="card"><div class="card-body"><form method="post">{% csrf_token %}
+{% include "partials/form.html" %}
+{% if duplicate %}<div class="form-check mt-3"><input class="form-check-input" type="checkbox" name="allow_duplicate" id="ad" value="1"><label class="form-check-label" for="ad">Create anyway (this is a different company)</label></div>{% endif %}
+<div class="mt-4 d-flex gap-2"><button class="btn btn-primary">Save</button><a class="btn btn-outline-secondary" href="{% if company %}{{ company.get_absolute_url }}{% else %}{% url 'crm:company_list' %}{% endif %}">Cancel</a></div>
+</form></div></div>
+{% endblock %}

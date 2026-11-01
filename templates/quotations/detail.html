@@ -1,0 +1,57 @@
+{% extends "base.html" %}{% load app_tags %}
+{% block title %}{{ q.number }}{% endblock %}
+{% block page_title %}{{ q.number }} <span class="badge bg-{% if q.status == 'approved' or q.status == 'sent' or q.status == 'accepted' %}success{% elif q.status == 'needs_input' %}warning text-dark{% elif q.status == 'pending_approval' %}danger{% else %}secondary{% endif %} fs-6 align-middle">{{ q.get_status_display }}</span>{% endblock %}
+{% block page_subtitle %}<a href="{{ q.company.get_absolute_url }}">{{ q.company.name }}</a>{% if q.contact %} · {{ q.contact.display_name }}{% endif %}{% if q.created_by_agent %} · drafted by the quotation agent{% endif %}{% if q.source_email %} · from <a href="{% url 'mailbox:inbound_detail' q.source_email.pk %}">buyer e-mail</a>{% endif %}{% if q.approved_by %} · approved by {{ q.approved_by }} {{ q.approved_at|date:"d M Y H:i" }}{% endif %}{% endblock %}
+{% block page_actions %}
+<a class="btn btn-sm btn-outline-secondary" href="{% url 'quotations:pdf' q.pk %}" target="_blank"><i class="bi bi-file-earmark-pdf"></i> {% if q.is_locked and q.pdf %}PDF{% else %}Draft preview{% endif %}</a>
+{% if user_can_edit %}
+{% if not q.is_locked %}<form method="post" action="{% url 'quotations:action' q.pk %}">{% csrf_token %}<input type="hidden" name="action" value="reprice"><button class="btn btn-sm btn-outline-secondary">Refresh prices</button></form>{% endif %}
+{% if q.status == 'draft' %}<form method="post" action="{% url 'quotations:action' q.pk %}">{% csrf_token %}<input type="hidden" name="action" value="submit"><button class="btn btn-sm btn-primary">Submit for approval</button></form>{% endif %}
+{% if user_is_manager and q.status in 'draft,pending_approval' and not q.missing_fields %}<form method="post" action="{% url 'quotations:action' q.pk %}">{% csrf_token %}<input type="hidden" name="action" value="approve"><button class="btn btn-sm btn-success" data-confirm="Approve {{ q.number }} for {{ q.total|money:q.currency }}? Prices, terms and validity become binding once sent.">Approve</button></form>{% endif %}
+{% if user_is_manager and q.status == 'approved' %}<form method="post" action="{% url 'quotations:action' q.pk %}">{% csrf_token %}<input type="hidden" name="action" value="send"><button class="btn btn-sm btn-success"><i class="bi bi-send"></i> Prepare e-mail</button></form>{% endif %}
+{% if q.status == 'sent' %}<form method="post" action="{% url 'quotations:action' q.pk %}">{% csrf_token %}<input type="hidden" name="action" value="accepted"><button class="btn btn-sm btn-outline-success">Mark accepted</button></form><form method="post" action="{% url 'quotations:action' q.pk %}">{% csrf_token %}<input type="hidden" name="action" value="rejected"><button class="btn btn-sm btn-outline-danger">Mark rejected</button></form>{% endif %}
+{% if q.is_locked %}<form method="post" action="{% url 'quotations:action' q.pk %}">{% csrf_token %}<input type="hidden" name="action" value="revision"><button class="btn btn-sm btn-outline-primary">New revision</button></form>{% endif %}
+{% endif %}{% endblock %}
+{% block content %}
+{% if q.missing_fields %}<div class="alert alert-warning py-2"><b>Human input needed before approval:</b><ul class="mb-0 small">{% for m in q.missing_fields %}<li>{{ m }}</li>{% endfor %}</ul></div>{% endif %}
+{% if q.internal_notes %}<div class="alert alert-light border small py-2"><b>Internal:</b> {{ q.internal_notes|linebreaksbr }}</div>{% endif %}
+<div class="card mb-3"><div class="table-responsive"><table class="table table-sm mb-0 align-middle"><thead><tr><th>#</th><th>Product (verified size)</th><th>Size / material</th><th>Pressure / connection</th><th>Qty</th><th>MOQ</th><th class="text-end">Unit price</th><th class="text-end">Amount</th><th>Price source</th><th></th></tr></thead><tbody>
+{% for line in lines %}<tr class="{% if line.unit_price is None or not line.variant %}table-warning{% endif %}">
+<td>{{ line.position }}</td><td>{{ line.description }}{% if line.customer_request %}<div class="small text-muted">Asked: {{ line.customer_request|truncatechars:90 }}</div>{% endif %}{% if not line.variant %}<div class="small text-danger">Not matched to a verified product</div>{% endif %}</td>
+<td class="small">{{ line.size }} {{ line.material }}</td><td class="small">{{ line.pressure_rating }} {{ line.connection_type }}</td>
+<td>{% if not q.is_locked and user_can_edit %}<form method="post" action="{% url 'quotations:line_action' line.pk %}" class="d-flex gap-1">{% csrf_token %}<input type="hidden" name="action" value="qty"><input name="quantity" value="{{ line.quantity }}" class="form-control form-control-sm" style="width:90px" inputmode="numeric"><button class="btn btn-sm btn-link p-0">✓</button></form>{% else %}{{ line.quantity }}{% endif %} {{ line.unit }}</td>
+<td class="small {% if line.below_moq %}text-danger fw-semibold{% endif %}">{{ line.moq|default:"—" }}</td>
+<td class="text-end">{{ line.unit_price|default_if_none:"—" }}</td><td class="text-end">{{ line.line_total|money }}</td>
+<td class="small">{% if line.price_overridden_by %}<span class="text-warning">manual by {{ line.price_overridden_by }}</span>{% elif line.price_item %}{{ line.price_item.price_list.name }} (≥{{ line.price_item.min_quantity }}){% else %}<span class="text-danger">no approved price</span>{% endif %}</td>
+<td class="text-nowrap">{% if not q.is_locked and user_can_edit %}
+{% if user_is_manager %}<form method="post" action="{% url 'quotations:line_action' line.pk %}" class="d-inline-flex gap-1">{% csrf_token %}<input type="hidden" name="action" value="price"><input name="unit_price" class="form-control form-control-sm" style="width:80px" placeholder="price" inputmode="decimal"><button class="btn btn-sm btn-link p-0" title="Manager price">set</button></form>{% endif %}
+<form method="post" action="{% url 'quotations:line_action' line.pk %}" class="d-inline">{% csrf_token %}<input type="hidden" name="action" value="delete"><button class="btn btn-sm btn-link text-danger p-0">remove</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="10" class="text-muted small">No lines yet.</td></tr>{% endfor %}
+<tr><td colspan="7" class="text-end">Subtotal</td><td class="text-end">{{ q.subtotal|money:q.currency }}</td><td colspan="2"></td></tr>
+{% if q.discount_percent %}<tr><td colspan="7" class="text-end">Discount {{ q.discount_percent }}% <span class="small text-muted">(set by {{ q.discount_set_by }})</span></td><td class="text-end">- {{ q.discount_amount|money:q.currency }}</td><td colspan="2"></td></tr>{% endif %}
+{% if q.freight_amount is not None %}<tr><td colspan="7" class="text-end">Freight</td><td class="text-end">{{ q.freight_amount|money:q.currency }}</td><td colspan="2"></td></tr>{% endif %}
+<tr class="fw-bold"><td colspan="7" class="text-end">Total</td><td class="text-end">{{ q.total|money:q.currency }}</td><td colspan="2"></td></tr>
+</tbody></table></div>
+{% if not q.is_locked and user_can_edit %}<div class="card-body border-top"><form method="post" action="{% url 'quotations:line_add' q.pk %}" class="row g-2 align-items-end">{% csrf_token %}
+<div class="col-md-5"><label class="form-label small">Verified product size</label>{{ line_form.variant }}</div><div class="col-md-2"><label class="form-label small">Quantity</label>{{ line_form.quantity }}</div><div class="col-md-1"><label class="form-label small">Unit</label>{{ line_form.unit }}</div><div class="col-md-3"><label class="form-label small">Buyer's wording (optional)</label>{{ line_form.customer_request }}</div><div class="col-md-1"><button class="btn btn-sm btn-primary w-100">Add</button></div></form>
+{% if user_is_manager %}<form method="post" action="{% url 'quotations:action' q.pk %}" class="d-flex gap-2 mt-3 align-items-end">{% csrf_token %}<input type="hidden" name="action" value="discount"><div><label class="form-label small">Discount % (manager only)</label><input name="discount_percent" value="{{ q.discount_percent }}" class="form-control form-control-sm" style="width:110px" inputmode="decimal"></div><button class="btn btn-sm btn-outline-warning">Apply discount</button></form>{% endif %}
+</div>{% endif %}
+</div>
+<div class="row g-3"><div class="col-lg-8"><div class="card"><div class="card-header">Commercial terms</div><div class="card-body">
+{% if q.is_locked %}<dl class="row small mb-0">
+<dt class="col-4">Contact</dt><dd class="col-8">{% if q.contact %}{{ q.contact.display_name }} &lt;{{ q.contact.email }}&gt;{% else %}—{% endif %}</dd>
+<dt class="col-4">Currency</dt><dd class="col-8">{{ q.currency }}</dd>
+<dt class="col-4">Incoterm</dt><dd class="col-8">{{ q.incoterm|default:"—" }}</dd>
+<dt class="col-4">Port of loading</dt><dd class="col-8">{{ q.port_of_loading|default:"—" }}</dd>
+<dt class="col-4">Destination</dt><dd class="col-8">{{ q.destination|default:"—" }}</dd>
+<dt class="col-4">Payment terms</dt><dd class="col-8">{{ q.payment_terms|default:"—" }}</dd>
+<dt class="col-4">Lead time</dt><dd class="col-8">{{ q.lead_time|default:"—" }}</dd>
+<dt class="col-4">Freight</dt><dd class="col-8">{% if q.freight_amount is not None %}{{ q.freight_amount|money:q.currency }} {% endif %}{{ q.freight_note }}</dd>
+<dt class="col-4">Packaging</dt><dd class="col-8">{{ q.packaging|default:"—" }}</dd>
+<dt class="col-4">Valid until</dt><dd class="col-8">{{ q.valid_until|date:"d M Y"|default:"—" }}</dd>
+<dt class="col-4">Notes</dt><dd class="col-8">{{ q.notes|default:"—"|linebreaksbr }}</dd>
+<dt class="col-4">Internal notes</dt><dd class="col-8">{{ q.internal_notes|default:"—"|linebreaksbr }}</dd></dl>
+{% else %}<form method="post" action="{% url 'quotations:update_terms' q.pk %}">{% csrf_token %}{% include "partials/form.html" with form=terms_form %}{% if user_can_edit %}<button class="btn btn-sm btn-primary mt-3">Save terms</button>{% endif %}</form>{% endif %}
+</div></div></div>
+<div class="col-lg-4"><div class="card"><div class="card-header">E-mails</div><ul class="list-group list-group-flush small">{% for e in emails %}<li class="list-group-item"><a href="{% url 'outreach:email_detail' e.pk %}">{{ e.subject }}</a> <span class="badge bg-{{ e.status|out_status_colour }}">{{ e.get_status_display }}</span></li>{% empty %}<li class="list-group-item text-muted">Not sent yet.</li>{% endfor %}</ul></div></div></div>
+{% endblock %}

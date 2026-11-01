@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Inbox{% endblock %}
+{% block page_title %}Inbox{% endblock %}
+{% block page_subtitle %}Business e-mails received in connected mailboxes, classified by the e-mail management agent.{% endblock %}
+{% block page_actions %}{% if user_can_edit %}<form method="post" action="{% url 'mailbox:sync_now' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-primary"><i class="bi bi-arrow-repeat"></i> Sync now</button></form>{% endif %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'mailbox:account_list' %}">Mailboxes</a>{% endblock %}
+{% block content %}
+<form class="card card-body py-2 mb-3" method="get"><div class="row g-2 align-items-end">
+<div class="col-md-3"><div class="btn-group btn-group-sm"><a class="btn btn-outline-primary {% if view == 'attention' %}active{% endif %}" href="?view=attention">Needs attention</a><a class="btn btn-outline-primary {% if view == 'all' %}active{% endif %}" href="?view=all">All</a></div></div>
+<input type="hidden" name="view" value="{{ view }}">
+<div class="col-md-3"><select class="form-select form-select-sm" name="cls"><option value="">All classifications</option>{% for v, l in classes %}<option value="{{ v }}" {% if f.cls == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+<div class="col-md-4"><input class="form-control form-control-sm" name="q" value="{{ f.q }}" placeholder="Subject, sender or company"></div>
+<div class="col-md-2"><button class="btn btn-sm btn-primary w-100">Filter</button></div></div></form>
+<div class="card"><div class="table-responsive"><table class="table table-hover table-sm mb-0 align-middle"><thead><tr><th>Received</th><th>From</th><th>Company</th><th>Subject / summary</th><th>Classification</th></tr></thead><tbody>
+{% for e in page_obj %}<tr class="{% if e.is_urgent %}table-danger{% endif %}"><td class="small text-nowrap">{{ e.received_at|date:"d M H:i" }}</td><td class="small">{{ e.from_name|default:"" }}<div class="text-muted">{{ e.from_email }}</div></td>
+<td class="small">{% if e.company %}<a href="{{ e.company.get_absolute_url }}">{{ e.company.name }}</a>{% else %}<span class="text-muted">unknown sender</span>{% endif %}</td>
+<td><a href="{% url 'mailbox:inbound_detail' e.pk %}" class="fw-semibold">{{ e.subject|default:"(no subject)"|truncatechars:70 }}</a><div class="small text-muted">{{ e.summary|truncatechars:140 }}</div></td>
+<td><span class="badge bg-{% if e.classification in 'interested,need_quotation,negotiation' %}success{% elif e.classification == 'complaint' %}danger{% elif e.classification in 'need_catalogue,need_technical,future,existing_customer' %}primary{% else %}secondary{% endif %}">{{ e.get_classification_display }}</span>{% if e.is_urgent %} <span class="badge bg-danger">urgent</span>{% endif %}{% if e.processing_error %} <i class="bi bi-exclamation-triangle text-warning" title="{{ e.processing_error }}"></i>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="5">{% include "partials/empty.html" with message="No e-mails here." %}</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% include "partials/pagination.html" %}
+{% endblock %}

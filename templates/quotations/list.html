@@ -1,0 +1,14 @@
+{% extends "base.html" %}{% load app_tags %}
+{% block title %}Quotations{% endblock %}
+{% block page_title %}Quotations{% endblock %}
+{% block page_subtitle %}Built only from approved price lists. Every quotation needs manager approval; discounts are manager-only.{% endblock %}
+{% block content %}
+<div class="btn-group btn-group-sm mb-3 flex-wrap"><a class="btn btn-outline-primary {% if not f.status %}active{% endif %}" href="?">All</a>{% for v, l in statuses %}<a class="btn btn-outline-primary {% if f.status == v %}active{% endif %}" href="?status={{ v }}">{{ l }}</a>{% endfor %}</div>
+<div class="card"><div class="table-responsive"><table class="table table-hover table-sm mb-0 align-middle"><thead><tr><th>Number</th><th>Company</th><th>Status</th><th>Missing</th><th class="text-end">Total</th><th>Valid until</th><th>Approved</th><th>Created</th></tr></thead><tbody>
+{% for q in page_obj %}<tr><td><a href="{% url 'quotations:detail' q.pk %}">{{ q.number }}</a>{% if q.created_by_agent %} <span class="badge bg-light text-dark border">AI draft</span>{% endif %}</td><td><a href="{{ q.company.get_absolute_url }}">{{ q.company.name }}</a><div class="small text-muted">{{ q.company.country.name|default:"" }}</div></td>
+<td><span class="badge bg-{% if q.status == 'approved' or q.status == 'sent' or q.status == 'accepted' %}success{% elif q.status == 'needs_input' %}warning text-dark{% elif q.status == 'pending_approval' %}danger{% else %}secondary{% endif %}">{{ q.get_status_display }}</span></td>
+<td class="small">{{ q.missing_fields|length }}</td><td class="text-end">{{ q.total|money:q.currency }}</td><td class="small">{{ q.valid_until|date:"d M Y"|default:"—" }}</td><td class="small">{{ q.approved_by.username|default:"—" }}</td><td class="small">{{ q.created_at|date:"d M Y" }}</td></tr>
+{% empty %}<tr><td colspan="8">{% include "partials/empty.html" with message="No quotations yet. Create one from a company page, or the agent drafts one when a buyer asks for a quotation." %}</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% include "partials/pagination.html" %}
+{% endblock %}

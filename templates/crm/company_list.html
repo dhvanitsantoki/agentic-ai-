@@ -1,0 +1,25 @@
+{% extends "base.html" %}{% load app_tags %}
+{% block title %}Companies{% endblock %}
+{% block page_title %}Companies{% endblock %}
+{% block page_subtitle %}Buyers, prospects and customers — every AI-sourced record carries its source evidence.{% endblock %}
+{% block page_actions %}
+<a class="btn btn-sm btn-outline-success" href="?{% query_with export='xlsx' %}"><i class="bi bi-file-earmark-excel"></i> Export Excel</a>
+{% if user_can_edit %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'crm:company_import' %}"><i class="bi bi-upload"></i> Import CSV</a>
+<a class="btn btn-sm btn-primary" href="{% url 'crm:company_create' %}"><i class="bi bi-plus"></i> New company</a>{% endif %}
+{% endblock %}
+{% block content %}
+{% include "crm/_filters.html" %}
+<div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle"><thead><tr>
+<th><a href="?{% query_with sort='name' %}">Company</a></th><th>Country</th><th>Type</th><th><a href="?{% query_with sort='-oem_score' %}">OEM score</a></th><th>Stage</th><th>Contacts</th><th>Owner</th><th><a href="?{% query_with sort='next_action_date' %}">Next action</a></th><th class="text-end"><a href="?{% query_with sort='-expected_order_value' %}">Potential</a></th></tr></thead><tbody>
+{% for c in page_obj %}<tr>
+<td><a class="fw-semibold" href="{{ c.get_absolute_url }}">{{ c.name }}</a>{% if c.do_not_contact %} <span class="badge bg-danger">DNC</span>{% endif %}<div class="small text-muted">{{ c.domain }}</div></td>
+<td class="small">{{ c.country.name|default:"—" }}</td><td class="small">{{ c.get_company_type_display }}<div class="text-muted">{{ c.get_business_type_display }}</div></td>
+<td>{% if c.oem_category %}<span class="badge bg-{{ c.oem_category|category_colour }} {% if c.oem_category == 'E' %}text-dark{% endif %}">{{ c.oem_category }}</span>{% endif %} {{ c.oem_score }}</td>
+<td><span class="badge bg-{{ c.stage|stage_colour }} {% if c.stage == 'lost' %}text-dark{% endif %}">{{ c.get_stage_display }}</span></td>
+<td>{{ c.n_contacts }}</td><td class="small">{{ c.owner.username|default:"—" }}</td>
+<td class="small">{% if c.next_action %}{{ c.next_action|truncatechars:40 }}<div class="{% if c.next_action_date and c.next_action_date|date:'Ymd' <= today|date:'Ymd' %}text-danger{% else %}text-muted{% endif %}">{{ c.next_action_date|date:"d M"|default:"" }}</div>{% else %}—{% endif %}</td>
+<td class="text-end small">{% if c.expected_order_value %}{{ c.expected_order_value|money:c.expected_value_currency }}{% else %}—{% endif %}</td>
+</tr>{% empty %}<tr><td colspan="9">{% include "partials/empty.html" with message="No companies match. Start a research run, import a CSV, or add a company manually." %}</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% include "partials/pagination.html" %}
+{% endblock %}

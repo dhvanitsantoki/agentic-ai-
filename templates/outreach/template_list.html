@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}E-mail templates{% endblock %}
+{% block page_title %}E-mail templates{% endblock %}
+{% block page_subtitle %}Writing guidance for the 10 e-mail types. The agent personalises each e-mail with sourced research — no generic mass mailings.{% endblock %}
+{% block content %}
+<div class="row g-3">{% for t in templates %}<div class="col-lg-6"><div class="card h-100"><div class="card-header d-flex">{{ t.name }}<span class="ms-auto">{% if t.approved_for_auto_send %}<span class="badge bg-success">auto-send approved</span>{% else %}<span class="badge bg-secondary">needs approval</span>{% endif %}{% if not t.is_active %} <span class="badge bg-dark">inactive</span>{% endif %}</span></div>
+<div class="card-body small"><p class="mb-1"><b>Purpose:</b> {{ t.purpose }}</p><p class="mb-1"><b>Call to action:</b> {{ t.call_to_action }}</p><p class="mb-1 text-muted">{{ t.guidance|truncatechars:260 }}</p><p class="mb-0 text-muted">Max {{ t.max_words }} words · example subject: <i>{{ t.example_subject }}</i></p></div>
+{% if user_is_manager %}<div class="card-footer bg-white"><a class="btn btn-sm btn-outline-primary" href="{% url 'outreach:template_edit' t.pk %}">Edit</a></div>{% endif %}</div></div>
+{% empty %}<div class="col-12">{% include "partials/empty.html" with message="Run manage.py setup_initial_data to create the templates." %}</div>{% endfor %}</div>
+{% endblock %}

@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block title %}Not allowed{% endblock %}
+{% block page_title %}Not allowed{% endblock %}
+{% block content %}<div class="alert alert-warning">{{ exception|default:"You do not have permission for this action." }}</div>
+{% if not user.is_authenticated %}{% endif %}{% endblock %}
+{% block public_content %}<div class="container mt-5"><div class="alert alert-warning">You do not have permission for this action.</div></div>{% endblock %}

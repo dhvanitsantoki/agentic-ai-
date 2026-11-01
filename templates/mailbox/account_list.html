@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Mailboxes{% endblock %}
+{% block page_title %}Connected mailboxes{% endblock %}
+{% block page_subtitle %}OAuth 2.0 only — no passwords are stored. Tokens are encrypted at rest.{% endblock %}
+{% block content %}
+<div class="row g-3 mb-3">
+{% for p in providers %}<div class="col-md-4"><div class="card h-100"><div class="card-body">
+  <h6>{{ p.label }}</h6>
+  {% if p.configured %}{% if user_is_admin %}<a class="btn btn-primary btn-sm" href="{% url 'mailbox:oauth_start' p.value %}"><i class="bi bi-plug"></i> Connect {{ p.label }}</a>{% endif %}
+  {% else %}<div class="small text-muted">OAuth client not configured on the server. See <code>docs/EMAIL_SETUP.md</code>.</div>{% endif %}
+  <div class="small text-muted mt-2">Redirect URI to register:<br><code class="user-select-all">{{ p.redirect_uri }}</code></div>
+</div></div></div>{% endfor %}
+</div>
+<div class="card"><div class="table-responsive"><table class="table mb-0 align-middle"><thead><tr><th>Mailbox</th><th>Provider</th><th>Status</th><th>Owner</th><th>Sending</th><th>Last sync</th><th></th></tr></thead><tbody>
+{% for a in accounts %}<tr><td>{{ a.email_address }}{% if a.display_name %}<div class="small text-muted">{{ a.display_name }}</div>{% endif %}{% if a.is_default_sender %} <span class="badge bg-primary">default sender</span>{% endif %}</td><td>{{ a.get_provider_display }}</td>
+<td><span class="badge bg-{% if a.status == 'connected' %}success{% elif a.status == 'error' %}danger{% else %}secondary{% endif %}">{{ a.get_status_display }}</span>{% if a.last_error %}<div class="small text-danger">{{ a.last_error|truncatechars:120 }}</div>{% endif %}</td>
+<td class="small">{{ a.owner.username|default:"—" }}</td><td class="small">{% if a.use_for_sending and a.is_active %}yes{% if a.daily_limit %} ({{ a.daily_limit }}/day){% endif %}{% else %}no{% endif %}</td><td class="small">{{ a.last_sync_at|date:"d M H:i"|default:"never" }}</td>
+<td class="text-nowrap">{% if user_is_admin %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'mailbox:account_edit' a.pk %}">Settings</a>
+{% if a.status == 'error' %}<a class="btn btn-sm btn-outline-primary" href="{% url 'mailbox:oauth_start' a.provider %}">Reconnect</a>{% endif %}
+<form class="d-inline" method="post" action="{% url 'mailbox:account_disconnect' a.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-danger" data-confirm="Disconnect this mailbox and delete its tokens?">Disconnect</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="7">{% include "partials/empty.html" with message="No mailbox connected. Connect the company's Zoho Mail, Gmail or Outlook mailbox to send and receive e-mails." %}</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

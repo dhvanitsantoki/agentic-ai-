@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% load app_tags %}
+{% block title %}Outbound e-mails{% endblock %}
+{% block page_title %}Outbound e-mails{% endblock %}
+{% block content %}
+<form class="card card-body py-2 mb-3" method="get"><div class="row g-2">
+<div class="col-md-3"><select name="status" class="form-select form-select-sm"><option value="">Any status</option>{% for v, l in statuses %}<option value="{{ v }}" {% if f.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+<div class="col-md-3"><select name="kind" class="form-select form-select-sm"><option value="">Any kind</option>{% for v, l in kinds %}<option value="{{ v }}" {% if f.kind == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+<div class="col-md-4"><input name="q" value="{{ f.q }}" class="form-control form-control-sm" placeholder="Subject, recipient, company"></div><div class="col-md-2"><button class="btn btn-sm btn-primary w-100">Filter</button></div></div></form>
+<div class="card"><div class="table-responsive"><table class="table table-hover table-sm mb-0 align-middle"><thead><tr><th>Created</th><th>Kind</th><th>Company / to</th><th>Subject</th><th>Status</th><th>Sent</th><th>Approved by</th></tr></thead><tbody>
+{% for e in page_obj %}<tr><td class="small text-nowrap">{{ e.created_at|date:"d M H:i" }}</td><td class="small">{{ e.get_kind_display }}{% if e.followup_step %} #{{ e.followup_step }}{% endif %}</td><td class="small"><a href="{{ e.company.get_absolute_url }}">{{ e.company.name }}</a><div class="text-muted">{{ e.to_email }}</div></td>
+<td><a href="{% url 'outreach:email_detail' e.pk %}">{{ e.subject|truncatechars:60 }}</a>{% if e.bounced_at %} <span class="badge bg-danger">bounced</span>{% endif %}</td><td><span class="badge bg-{{ e.status|out_status_colour }} {% if e.status == 'cancelled' %}text-dark{% endif %}">{{ e.get_status_display }}</span>{% if e.error and e.status != 'sent' %}<div class="small text-muted">{{ e.error|truncatechars:60 }}</div>{% endif %}</td>
+<td class="small">{{ e.sent_at|date:"d M H:i"|default:"" }}</td><td class="small">{{ e.approved_by.username|default:"" }}{% if e.status == 'sent' and not e.approved_by %}<span class="badge bg-light text-dark border">auto (Mode 3)</span>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="7">{% include "partials/empty.html" %}</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% include "partials/pagination.html" %}
+{% endblock %}

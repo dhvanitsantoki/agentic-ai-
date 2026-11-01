@@ -1,0 +1,35 @@
+:root { --sidebar-w: 248px; --brand: #0b5394; --brand-dark: #083d6d; }
+body { background: #f4f6f9; font-size: .925rem; }
+.app-sidebar { width: var(--sidebar-w); min-height: 100vh; background: #0f2235; color: #c9d4e0; position: fixed; top: 0; left: 0; overflow-y: auto; z-index: 1030; }
+.app-sidebar .brand { padding: 1rem 1.1rem; font-weight: 700; color: #fff; font-size: 1.05rem; border-bottom: 1px solid rgba(255,255,255,.08); }
+.app-sidebar .brand small { display: block; font-weight: 400; color: #8fa3b8; font-size: .72rem; }
+.app-sidebar .nav-section { text-transform: uppercase; font-size: .68rem; letter-spacing: .06em; color: #6f849a; padding: .9rem 1.1rem .3rem; }
+.app-sidebar a.nav-link { color: #c9d4e0; padding: .38rem 1.1rem; border-left: 3px solid transparent; display: flex; align-items: center; gap: .55rem; }
+.app-sidebar a.nav-link:hover { background: rgba(255,255,255,.05); color: #fff; }
+.app-sidebar a.nav-link.active { background: rgba(255,255,255,.08); border-left-color: #4ea3ff; color: #fff; }
+.app-sidebar .badge { margin-left: auto; }
+.app-main { margin-left: var(--sidebar-w); min-height: 100vh; }
+.app-topbar { background: #fff; border-bottom: 1px solid #e3e8ee; padding: .55rem 1.25rem; position: sticky; top: 0; z-index: 1020; }
+.app-content { padding: 1.25rem; }
+.card { border: 1px solid #e3e8ee; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.card-header { background: #fff; font-weight: 600; }
+.kpi .value { font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
+.kpi .label { color: #6b7785; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
+.table > :not(caption) > * > * { padding: .45rem .6rem; }
+.table thead th { font-size: .75rem; text-transform: uppercase; letter-spacing: .03em; color: #6b7785; background: #f8fafc; }
+.kanban { display: flex; gap: .75rem; overflow-x: auto; padding-bottom: 1rem; }
+.kanban-col { min-width: 230px; max-width: 230px; background: #eef2f6; border-radius: .5rem; padding: .5rem; }
+.kanban-col h6 { font-size: .78rem; text-transform: uppercase; color: #4a5866; display: flex; justify-content: space-between; }
+.kanban-card { background: #fff; border-radius: .4rem; padding: .5rem .6rem; margin-bottom: .5rem; border: 1px solid #e1e6ec; font-size: .85rem; }
+.evidence { font-size: .82rem; color: #4a5866; border-left: 3px solid #cfd8e3; padding-left: .6rem; }
+.email-body { white-space: pre-wrap; font-family: inherit; background: #fbfcfe; border: 1px solid #e3e8ee; border-radius: .4rem; padding: .9rem; }
+.status-dot { width: .6rem; height: .6rem; border-radius: 50%; display: inline-block; }
+.form-label { font-weight: 500; margin-bottom: .2rem; }
+.form-text { font-size: .78rem; }
+.helptext { font-size: .78rem; color: #6b7785; }
+.sticky-actions { position: sticky; bottom: 0; background: #fff; padding: .75rem 0; border-top: 1px solid #e3e8ee; }
+@media (max-width: 991.98px) {
+  .app-sidebar { transform: translateX(-100%); transition: transform .2s; }
+  .app-sidebar.show { transform: translateX(0); }
+  .app-main { margin-left: 0; }
+}

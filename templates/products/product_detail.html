@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ product.name }}{% endblock %}
+{% block page_title %}{{ product.name }} <small class="text-muted fs-6">{{ product.material }} · {{ product.category.name }}</small>{% endblock %}
+{% block page_subtitle %}{% if product.is_verified %}<span class="text-success"><i class="bi bi-patch-check-fill"></i> Verified by {{ product.verified_by|default:"—" }} on {{ product.verified_at|date:"d M Y" }}</span>{% else %}<span class="text-warning"><i class="bi bi-exclamation-triangle-fill"></i> Not verified – the AI agents will not use this product.</span>{% endif %}{% endblock %}
+{% block page_actions %}
+{% if user_can_edit %}<a class="btn btn-sm btn-outline-primary" href="{% url 'products:product_edit' product.pk %}"><i class="bi bi-pencil"></i> Edit</a>{% endif %}
+{% if user_is_manager %}<form method="post" action="{% url 'products:product_verify' product.pk %}">{% csrf_token %}{% if product.is_verified %}<input type="hidden" name="action" value="unverify"><button class="btn btn-sm btn-outline-warning">Mark unverified</button>{% else %}<button class="btn btn-sm btn-success" {% if missing %}data-confirm="Some data is still missing ({{ missing|join:', ' }}). Verify anyway?"{% endif %}><i class="bi bi-patch-check"></i> Verify product data</button>{% endif %}</form>{% endif %}
+{% endblock %}
+{% block content %}
+{% if missing %}<div class="alert alert-warning py-2 small"><b>Incomplete:</b> {{ missing|join:", " }}</div>{% endif %}
+<div class="row g-3">
+<div class="col-lg-6"><div class="card h-100"><div class="card-header">Specifications</div><div class="card-body small">
+<dl class="row mb-0">
+<dt class="col-4">Model code</dt><dd class="col-8">{{ product.model_code|default:"—" }}</dd>
+<dt class="col-4">Sizes</dt><dd class="col-8">{{ product.available_sizes|default:"—" }}</dd>
+<dt class="col-4">Pressure rating</dt><dd class="col-8">{{ product.pressure_rating|default:"—" }}</dd>
+<dt class="col-4">Connections</dt><dd class="col-8">{{ product.connection_types|default:"—" }}</dd>
+<dt class="col-4">Standards</dt><dd class="col-8">{{ product.standards|default:"—" }}</dd>
+<dt class="col-4">Colours</dt><dd class="col-8">{{ product.colours|default:"—" }}</dd>
+<dt class="col-4">MOQ</dt><dd class="col-8">{{ product.default_moq|default:"—" }}</dd>
+<dt class="col-4">Packaging</dt><dd class="col-8">{{ product.packaging_details|default:"—" }}</dd>
+<dt class="col-4">Sample</dt><dd class="col-8">{{ product.sample_available|yesno:"Available,Not available" }}</dd>
+<dt class="col-4">OEM / private label</dt><dd class="col-8">{{ product.oem_customisable|yesno:"Offered,Not offered" }}</dd>
+<dt class="col-4">Applications</dt><dd class="col-8">{{ product.applications|default:"—"|linebreaksbr }}</dd>
+<dt class="col-4">Technical data</dt><dd class="col-8">{{ product.technical_specifications|default:"—"|linebreaksbr }}</dd>
+<dt class="col-4">Description</dt><dd class="col-8">{{ product.description|default:"—"|linebreaksbr }}</dd>
+<dt class="col-4">Catalogue</dt><dd class="col-8">{% if product.catalogue_pdf %}<a href="{{ product.catalogue_pdf.url }}" target="_blank">Download PDF</a>{% else %}—{% endif %}</dd>
+<dt class="col-4">Drawing</dt><dd class="col-8">{% if product.technical_drawing %}<a href="{{ product.technical_drawing.url }}" target="_blank">Open drawing</a>{% else %}—{% endif %}</dd>
+</dl></div></div></div>
+<div class="col-lg-6"><div class="card h-100"><div class="card-header d-flex">Images</div><div class="card-body">
+<div class="d-flex flex-wrap gap-2 mb-3">{% for img in images %}<div class="text-center"><a href="{{ img.image.url }}" target="_blank"><img src="{{ img.image.url }}" alt="{{ img.caption }}" style="height:110px;max-width:160px;object-fit:contain" class="border rounded"></a>
+{% if user_can_edit %}<form method="post" action="{% url 'products:image_delete' img.pk %}">{% csrf_token %}<button class="btn btn-link btn-sm text-danger p-0" data-confirm="Delete this image?">remove</button></form>{% endif %}</div>{% empty %}<span class="text-muted small">No images uploaded.</span>{% endfor %}</div>
+{% if user_can_edit %}<form method="post" enctype="multipart/form-data" action="{% url 'products:image_add' product.pk %}" class="row g-2">{% csrf_token %}
+<div class="col-6">{{ image_form.image }}</div><div class="col-4">{{ image_form.caption }}</div><div class="col-2"><button class="btn btn-sm btn-outline-primary w-100">Upload</button></div></form>{% endif %}
+</div></div></div>
+<div class="col-12"><div class="card"><div class="card-header d-flex align-items-center">Sizes / SKUs <span class="ms-auto">{% if user_can_edit %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'products:variant_import' product.pk %}"><i class="bi bi-upload"></i> Import CSV</a>{% endif %}</span></div>
+<div class="table-responsive"><table class="table table-sm mb-0 align-middle"><thead><tr><th>SKU</th><th>Size</th><th>mm</th><th>Pressure</th><th>Connection</th><th>MOQ</th><th>Packaging</th><th>Weight (g)</th><th>Active</th><th></th></tr></thead><tbody>
+{% for v in variants %}<tr><td>{{ v.sku }}</td><td>{{ v.size }}</td><td>{{ v.size_mm|default:"" }}</td><td>{{ v.effective_pressure_rating|default:"—" }}</td><td>{{ v.connection_type|default:"—" }}</td><td>{{ v.effective_moq|default:"—" }}</td><td>{{ v.effective_packaging|default:"—" }}</td><td>{{ v.unit_weight_g|default:"" }}</td><td>{{ v.is_active|yesno:"Yes,No" }}</td>
+<td class="text-nowrap">{% if user_can_edit %}<a href="{% url 'products:variant_edit' v.pk %}" class="btn btn-sm btn-link p-0">edit</a> <form class="d-inline" method="post" action="{% url 'products:variant_delete' v.pk %}">{% csrf_token %}<button class="btn btn-sm btn-link text-danger p-0" data-confirm="Remove this size?">remove</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="10" class="text-muted small">No sizes yet.</td></tr>{% endfor %}
+</tbody></table></div>
+{% if user_can_edit %}<div class="card-body border-top"><form method="post" action="{% url 'products:variant_add' product.pk %}" class="row g-2 align-items-end">{% csrf_token %}
+<div class="col-md-2"><label class="form-label small">SKU *</label>{{ variant_form.sku }}</div>
+<div class="col-md-1"><label class="form-label small">Size *</label>{{ variant_form.size }}</div>
+<div class="col-md-1"><label class="form-label small">mm</label>{{ variant_form.size_mm }}</div>
+<div class="col-md-2"><label class="form-label small">Pressure</label>{{ variant_form.pressure_rating }}</div>
+<div class="col-md-2"><label class="form-label small">Connection</label>{{ variant_form.connection_type }}</div>
+<div class="col-md-1"><label class="form-label small">MOQ</label>{{ variant_form.moq }}</div>
+<div class="col-md-2"><label class="form-label small">Packaging</label>{{ variant_form.packaging }}</div>
+<div class="col-md-1"><button class="btn btn-sm btn-primary w-100">Add</button></div>
+</form></div>{% endif %}
+</div></div>
+<div class="col-lg-7"><div class="card"><div class="card-header">Prices (from price lists)</div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Size</th><th>Price list</th><th>Status</th><th>From qty</th><th class="text-end">Unit price</th></tr></thead><tbody>
+{% for i in price_items %}<tr><td>{{ i.variant.size }}</td><td><a href="{% url 'products:pricelist_detail' i.price_list_id %}">{{ i.price_list.name }}</a></td><td>{{ i.price_list.get_status_display }}</td><td>{{ i.min_quantity }}</td><td class="text-end">{{ i.unit_price }} {{ i.price_list.currency }}</td></tr>
+{% empty %}<tr><td colspan="5" class="text-muted small">No prices recorded. Quotations for this product will request human input.</td></tr>{% endfor %}
+</tbody></table></div></div></div>
+<div class="col-lg-5"><div class="card"><div class="card-header">Documents</div><ul class="list-group list-group-flush">
+{% for d in documents %}<li class="list-group-item small"><a href="{{ d.file.url }}" target="_blank">{{ d.title }}</a> <span class="text-muted">({{ d.get_kind_display }})</span> {% if d.approved_for_sending %}<span class="badge bg-success">approved for sending</span>{% endif %}</li>
+{% empty %}<li class="list-group-item small text-muted">No linked documents. <a href="{% url 'products:document_create' %}">Upload one</a>.</li>{% endfor %}
+</ul></div></div>
+</div>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}{% load app_tags %}
+{% block title %}{{ email.subject }}{% endblock %}
+{% block page_title %}{{ email.subject }}{% endblock %}
+{% block page_subtitle %}<span class="badge bg-{{ email.status|out_status_colour }} {% if email.status == 'cancelled' %}text-dark{% endif %}">{{ email.get_status_display }}</span> · {{ email.get_kind_display }}{% if email.followup_step %} step {{ email.followup_step }}{% endif %} · to {{ email.to_email }} · <a href="{{ email.company.get_absolute_url }}">{{ email.company.name }}</a>{% endblock %}
+{% block page_actions %}{% if user_can_edit %}
+{% if email.status == 'pending_approval' or email.status == 'draft' %}<form method="post" action="{% url 'outreach:email_decide' email.pk %}">{% csrf_token %}<input type="hidden" name="action" value="approve"><button class="btn btn-sm btn-success" {% if email.sensitive_flags and not can_approve_sensitive %}disabled title="Manager approval required"{% endif %}><i class="bi bi-check2"></i> Approve &amp; send</button></form>{% endif %}
+{% if email.is_open or email.status == 'blocked' %}<a class="btn btn-sm btn-outline-primary" href="{% url 'outreach:email_edit' email.pk %}"><i class="bi bi-pencil"></i> Edit</a>
+<form method="post" action="{% url 'outreach:email_decide' email.pk %}">{% csrf_token %}<input type="hidden" name="action" value="recheck"><button class="btn btn-sm btn-outline-secondary">Re-check policy</button></form>
+<form method="post" action="{% url 'outreach:email_decide' email.pk %}">{% csrf_token %}<input type="hidden" name="action" value="{% if email.status == 'approved' %}cancel{% else %}reject{% endif %}"><button class="btn btn-sm btn-outline-danger">{% if email.status == 'approved' %}Cancel sending{% else %}Reject{% endif %}</button></form>{% endif %}
+{% endif %}{% endblock %}
+{% block content %}
+{% if automation_stopped and email.status == 'approved' %}<div class="alert alert-dark py-2 small">Automation is stopped – this approved e-mail will not be sent until automation is resumed.</div>{% endif %}
+{% if email.error and email.status != 'sent' %}<div class="alert alert-warning py-2 small">{{ email.error }}{% if email.scheduled_for %} – next attempt after {{ email.scheduled_for|date:"d M H:i" }}{% endif %}</div>{% endif %}
+<div class="row g-3"><div class="col-lg-8">
+  <div class="card"><div class="card-body">
+    <div class="small text-muted mb-2">From: {{ email.account.sender_header|default:"default sending mailbox" }}{% if email.cc_emails %} · Cc: {{ email.cc_emails }}{% endif %}</div>
+    <pre class="email-body">{{ email.body_text }}{% if footer %}
+
+--
+{{ footer }}{% endif %}</pre>
+    {% if email.attachments.all or email.quotation %}<div class="small"><i class="bi bi-paperclip"></i> {% for d in email.attachments.all %}<a href="{{ d.file.url }}" target="_blank">{{ d.title }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}{% if email.quotation %} {% if email.attachments.all %}, {% endif %}<a href="{% url 'quotations:detail' email.quotation.pk %}">Quotation {{ email.quotation.number }} (PDF)</a>{% endif %}</div>{% endif %}
+  </div></div>
+  {% for r in replies %}<div class="card mt-3"><div class="card-header">Reply from {{ r.from_email }} · {{ r.received_at|date:"d M Y H:i" }} · <a href="{% url 'mailbox:inbound_detail' r.pk %}">{{ r.get_classification_display }}</a></div><div class="card-body small">{{ r.summary|default:r.body_text|truncatechars:600 }}</div></div>{% endfor %}
+</div>
+<div class="col-lg-4">
+  {% if decision %}<div class="card mb-3 {% if decision.is_blocked %}border-danger{% endif %}"><div class="card-header">Policy check</div><div class="card-body small">
+    {% if decision.blocked %}<div class="text-danger mb-2"><b>Blocked:</b><ul class="mb-0">{% for r in decision.blocked %}<li>{{ r }}</li>{% endfor %}</ul></div>{% endif %}
+    {% if decision.approval %}<b>Needs approval because:</b><ul>{% for r in decision.approval %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
+    {% if decision.auto_send %}<span class="text-success">May be sent automatically (Mode 3).</span>{% endif %}
+    {% if decision.sensitive %}<div>{% include "outreach/_flags.html" with flags=decision.sensitive %}</div>{% endif %}
+  </div></div>{% elif email.approval_reasons %}<div class="card mb-3"><div class="card-header">Policy notes</div><div class="card-body small"><ul class="mb-0">{% for r in email.approval_reasons %}<li>{{ r }}</li>{% endfor %}</ul></div></div>{% endif %}
+  {% if email.personalization.needs_human_input %}<div class="card mb-3 border-warning"><div class="card-header">Needs your input</div><ul class="list-group list-group-flush small">{% for n in email.personalization.needs_human_input %}<li class="list-group-item">{{ n }}</li>{% endfor %}</ul></div>{% endif %}
+  {% if email.personalization.facts_used %}<div class="card mb-3"><div class="card-header">Facts used by the agent</div><ul class="list-group list-group-flush small">{% for f in email.personalization.facts_used %}<li class="list-group-item">{{ f.fact }}<div class="text-muted">{{ f.source }}</div></li>{% endfor %}</ul></div>{% endif %}
+  <div class="card"><div class="card-header">Tracking</div><div class="card-body small"><dl class="row mb-0">
+    <dt class="col-5">Created</dt><dd class="col-7">{{ email.created_at|date:"d M Y H:i" }} by {% if email.created_by_agent %}{{ email.created_by_agent }}{% elif email.created_by %}{{ email.created_by.username }}{% endif %}</dd>
+    <dt class="col-5">Approved</dt><dd class="col-7">{% if email.approved_by %}{{ email.approved_by }} {{ email.approved_at|date:"d M H:i" }}{% else %}—{% endif %}</dd>
+    <dt class="col-5">Sent</dt><dd class="col-7">{{ email.sent_at|date:"d M Y H:i"|default:"—" }}</dd>
+    <dt class="col-5">Message-ID</dt><dd class="col-7 text-break">{{ email.rfc_message_id|default:"—" }}</dd>
+    <dt class="col-5">Provider id</dt><dd class="col-7 text-break">{{ email.provider_message_id|default:"—" }}</dd>
+    <dt class="col-5">Thread</dt><dd class="col-7 text-break">{{ email.provider_thread_id|default:"—" }}</dd>
+    {% if email.bounced_at %}<dt class="col-5 text-danger">Bounced</dt><dd class="col-7 text-danger">{{ email.bounced_at|date:"d M Y H:i" }}</dd>{% endif %}
+    {% if email.rejected_reason %}<dt class="col-5">Reason</dt><dd class="col-7">{{ email.rejected_reason }}</dd>{% endif %}
+  </dl></div></div>
+</div></div>
+{% endblock %}

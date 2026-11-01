@@ -1,0 +1,92 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{% block title %}Dashboard{% endblock %} · {{ app_brand|default:"Flotec" }} Export Sales AI</title>
+  <link rel="stylesheet" href="{% static 'vendor/bootstrap.min.css' %}">
+  <link rel="stylesheet" href="{% static 'vendor/bootstrap-icons.min.css' %}">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+{% if user.is_authenticated %}
+{% with path=request.path %}
+<nav class="app-sidebar">
+  <div class="brand"><i class="bi bi-droplet-half"></i> {{ app_brand|default:"Flotec" }} Sales AI
+    <small>{{ app_company|default:"Ajay Plastic" }} · Export &amp; OEM</small></div>
+  <a class="nav-link {% if path == '/' %}active{% endif %}" href="{% url 'dashboard' %}"><i class="bi bi-speedometer2"></i> Dashboard</a>
+
+  <div class="nav-section">Sales &amp; CRM</div>
+  <a class="nav-link {% if '/crm/pipeline' in path %}active{% endif %}" href="{% url 'crm:pipeline' %}"><i class="bi bi-kanban"></i> Pipeline</a>
+  <a class="nav-link {% if '/crm/companies' in path %}active{% endif %}" href="{% url 'crm:company_list' %}"><i class="bi bi-buildings"></i> Companies</a>
+  <a class="nav-link {% if '/crm/contacts' in path %}active{% endif %}" href="{% url 'crm:contact_list' %}"><i class="bi bi-person-lines-fill"></i> Contacts</a>
+  <a class="nav-link {% if '/crm/tasks' in path %}active{% endif %}" href="{% url 'crm:task_list' %}"><i class="bi bi-check2-square"></i> Tasks {% if nav_counts.tasks_due %}<span class="badge bg-warning text-dark">{{ nav_counts.tasks_due }}</span>{% endif %}</a>
+
+  <div class="nav-section">AI research</div>
+  <a class="nav-link {% if '/research/runs' in path %}active{% endif %}" href="{% url 'research:run_list' %}"><i class="bi bi-search"></i> Research runs</a>
+  <a class="nav-link {% if '/research/review' in path %}active{% endif %}" href="{% url 'research:review_queue' %}"><i class="bi bi-patch-question"></i> Review queue {% if nav_counts.review %}<span class="badge bg-info text-dark">{{ nav_counts.review }}</span>{% endif %}</a>
+  <a class="nav-link {% if '/geo/' in path %}active{% endif %}" href="{% url 'geo:market_overview' %}"><i class="bi bi-globe2"></i> Country markets</a>
+
+  <div class="nav-section">Communication</div>
+  <a class="nav-link {% if '/outreach/approvals' in path %}active{% endif %}" href="{% url 'outreach:approval_queue' %}"><i class="bi bi-shield-check"></i> Approvals {% if nav_counts.approvals %}<span class="badge bg-danger">{{ nav_counts.approvals }}</span>{% endif %}</a>
+  <a class="nav-link {% if '/mailbox/inbox' in path %}active{% endif %}" href="{% url 'mailbox:inbox' %}"><i class="bi bi-inbox"></i> Inbox {% if nav_counts.inbox %}<span class="badge bg-primary">{{ nav_counts.inbox }}</span>{% endif %}</a>
+  <a class="nav-link {% if '/outreach/emails' in path %}active{% endif %}" href="{% url 'outreach:email_list' %}"><i class="bi bi-send"></i> Outbound e-mails</a>
+  <a class="nav-link {% if '/followups/' in path %}active{% endif %}" href="{% url 'followups:enrollment_list' %}"><i class="bi bi-arrow-repeat"></i> Follow-ups</a>
+  <a class="nav-link {% if '/outreach/templates' in path %}active{% endif %}" href="{% url 'outreach:template_list' %}"><i class="bi bi-file-earmark-text"></i> E-mail templates</a>
+
+  <div class="nav-section">Commercial</div>
+  <a class="nav-link {% if '/quotations/' in path %}active{% endif %}" href="{% url 'quotations:list' %}"><i class="bi bi-receipt"></i> Quotations {% if nav_counts.quotations %}<span class="badge bg-danger">{{ nav_counts.quotations }}</span>{% endif %}</a>
+  <a class="nav-link {% if '/products/' in path and '/prices' not in path and '/documents' not in path %}active{% endif %}" href="{% url 'products:product_list' %}"><i class="bi bi-box-seam"></i> Products</a>
+  <a class="nav-link {% if '/products/prices' in path %}active{% endif %}" href="{% url 'products:pricelist_list' %}"><i class="bi bi-currency-exchange"></i> Price lists</a>
+  <a class="nav-link {% if '/products/documents' in path %}active{% endif %}" href="{% url 'products:document_list' %}"><i class="bi bi-file-earmark-pdf"></i> Catalogues &amp; files</a>
+
+  <div class="nav-section">Management</div>
+  <a class="nav-link {% if '/reports/' in path %}active{% endif %}" href="{% url 'reports:list' %}"><i class="bi bi-graph-up"></i> Reports</a>
+  <a class="nav-link {% if '/agents/' in path %}active{% endif %}" href="{% url 'agents:control' %}"><i class="bi bi-cpu"></i> Automation {% if nav_counts.agent_errors %}<span class="badge bg-danger">{{ nav_counts.agent_errors }}</span>{% endif %}</a>
+  <a class="nav-link {% if '/settings/' in path %}active{% endif %}" href="{% url 'core:settings_home' %}"><i class="bi bi-gear"></i> Settings</a>
+</nav>
+{% endwith %}
+<div class="app-main">
+  <div class="app-topbar d-flex align-items-center gap-2 flex-wrap">
+    <button class="btn btn-sm btn-outline-secondary d-lg-none" id="sidebarToggle" type="button" aria-label="Menu"><i class="bi bi-list"></i></button>
+    <span class="badge rounded-pill {% if app_settings.execution_mode == 3 %}bg-danger{% elif app_settings.execution_mode == 2 %}bg-primary{% else %}bg-secondary{% endif %}" title="Execution mode">{{ app_settings.get_execution_mode_display }}</span>
+    <span class="badge rounded-pill {% if app_settings.automation_state == 'running' %}bg-success{% elif app_settings.automation_state == 'paused' %}bg-warning text-dark{% else %}bg-dark{% endif %}" title="Automation state"><i class="bi bi-circle-fill" style="font-size:.5rem"></i> Automation {{ app_settings.get_automation_state_display|lower }}</span>
+    {% if not ai_configured %}<span class="badge rounded-pill bg-light text-danger border" title="Set ANTHROPIC_API_KEY to enable AI agents"><i class="bi bi-exclamation-triangle"></i> AI not configured</span>{% endif %}
+    <div class="ms-auto d-flex align-items-center gap-3">
+      <a href="{% url 'core:notifications' %}" class="text-decoration-none position-relative text-secondary" title="Notifications">
+        <i class="bi bi-bell fs-5"></i>{% if nav_counts.notifications %}<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{{ nav_counts.notifications }}</span>{% endif %}
+      </a>
+      <div class="dropdown">
+        <a class="dropdown-toggle text-decoration-none text-dark" href="#" data-bs-toggle="dropdown"><i class="bi bi-person-circle"></i> {{ user.get_full_name|default:user.username }} <small class="text-muted">({{ user_role_label }})</small></a>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li><a class="dropdown-item" href="{% url 'password_change' %}">Change password</a></li>
+          <li><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="dropdown-item">Sign out</button></form></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="app-content">
+    {% if messages %}{% for message in messages %}
+      <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'info' }}{% endif %} alert-dismissible fade show py-2" role="alert">{{ message }}<button type="button" class="btn-close py-2" data-bs-dismiss="alert"></button></div>
+    {% endfor %}{% endif %}
+    <div class="d-flex align-items-center flex-wrap gap-2 mb-3">
+      <div>
+        <h4 class="mb-0">{% block page_title %}{% endblock %}</h4>
+        <div class="text-muted small">{% block page_subtitle %}{% endblock %}</div>
+      </div>
+      <div class="ms-auto d-flex gap-2 flex-wrap">{% block page_actions %}{% endblock %}</div>
+    </div>
+    {% block content %}{% endblock %}
+  </div>
+</div>
+{% else %}
+  {% block public_content %}{% endblock %}
+{% endif %}
+<script src="{% static 'vendor/bootstrap.bundle.min.js' %}"></script>
+<script src="{% static 'vendor/htmx.min.js' %}"></script>
+<script src="{% static 'js/app.js' %}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

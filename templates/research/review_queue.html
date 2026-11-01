@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Review queue{% endblock %}
+{% block page_title %}Research review queue{% endblock %}
+{% block page_subtitle %}Findings that failed an automatic check (e.g. website unreachable). Approve only if you have confirmed the company is real and active.{% endblock %}
+{% block content %}
+{% for f in page_obj %}
+<div class="card mb-2"><div class="card-body">
+  <div class="d-flex flex-wrap gap-2 align-items-center mb-1"><b>{{ f.name }}</b> <a class="small" href="{{ f.website }}" target="_blank" rel="noopener noreferrer">{{ f.website }}</a> <span class="small text-muted">{{ f.country_code }} · run <a href="{% url 'research:run_detail' f.run_id %}">#{{ f.run_id }}</a></span></div>
+  <div class="small text-danger mb-1">{{ f.reason }}</div>
+  <div class="small">{{ f.raw.description|truncatechars:300 }}</div>
+  {% if user_can_edit %}<div class="d-flex gap-2 mt-2"><form method="post" action="{% url 'research:finding_review' f.pk %}">{% csrf_token %}<input type="hidden" name="action" value="approve"><button class="btn btn-sm btn-success" data-confirm="Add this company to the CRM?">Approve &amp; add</button></form>
+  <form method="post" action="{% url 'research:finding_review' f.pk %}">{% csrf_token %}<input type="hidden" name="action" value="reject"><button class="btn btn-sm btn-outline-danger">Reject</button></form></div>{% endif %}
+</div></div>
+{% empty %}{% include "partials/empty.html" with message="Nothing waiting for review." %}{% endfor %}
+{% include "partials/pagination.html" %}
+{% endblock %}

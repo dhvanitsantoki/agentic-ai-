@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block page_title %}Notifications{% endblock %}
+{% block page_actions %}<form method="post" action="{% url 'core:notifications_read' %}">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary">Mark all read</button></form>{% endblock %}
+{% block content %}
+<div class="card"><ul class="list-group list-group-flush">
+{% for n in page_obj %}<li class="list-group-item {% if not n.is_read %}bg-light{% endif %}"><div class="d-flex"><span class="badge bg-{{ n.level }} me-2 align-self-start">{{ n.get_level_display }}</span><div><div class="fw-semibold">{% if n.url %}<a href="{{ n.url }}">{{ n.title }}</a>{% else %}{{ n.title }}{% endif %}</div>{% if n.body %}<div class="small text-muted">{{ n.body|linebreaksbr }}</div>{% endif %}</div><small class="ms-auto text-muted">{{ n.created_at|timesince }} ago</small></div></li>
+{% empty %}<li class="list-group-item">{% include "partials/empty.html" with message="No notifications." %}</li>{% endfor %}
+</ul></div>
+{% include "partials/pagination.html" %}
+{% endblock %}
