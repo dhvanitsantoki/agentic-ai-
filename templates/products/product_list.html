@@ -16,6 +16,10 @@
   <div class="col-md-2"><select class="form-select form-select-sm" name="verified"><option value="">Verified + unverified</option><option value="1" {% if filters.verified == '1' %}selected{% endif %}>Verified only</option><option value="0" {% if filters.verified == '0' %}selected{% endif %}>Unverified only</option></select></div>
   <div class="col-md-2"><button class="btn btn-sm btn-outline-primary w-100">Filter</button></div>
 </div></form>
+{% if user_is_manager and unverified_shown %}<div class="alert alert-warning d-flex flex-wrap align-items-center gap-2 py-2">
+<span><b>{{ unverified_shown }}</b> product(s) in this list are not verified - the AI agents ignore them until a manager checks the data.</span>
+<form method="post" action="{% url 'products:product_bulk_verify' %}" class="ms-auto">{% csrf_token %}{% for k, v in filters.items %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+<button class="btn btn-sm btn-success" data-confirm="Have you checked the names, materials, sizes and pressure ratings of these {{ unverified_shown }} products? Verify them all?"><i class="bi bi-patch-check"></i> Verify all {{ unverified_shown }} shown</button></form></div>{% endif %}
 <div class="card"><div class="table-responsive"><table class="table table-hover mb-0 align-middle"><thead><tr><th>Product</th><th>Category</th><th>Material</th><th>Sizes</th><th>Pressure</th><th>MOQ</th><th>Sample</th><th>Status</th></tr></thead><tbody>
 {% for p in page_obj %}<tr>
   <td><a href="{% url 'products:product_detail' p.pk %}" class="fw-semibold">{{ p.name }}</a>{% if p.model_code %}<div class="small text-muted">{{ p.model_code }}</div>{% endif %}</td>

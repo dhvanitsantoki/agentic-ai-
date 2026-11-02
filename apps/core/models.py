@@ -142,8 +142,6 @@ class CompanyProfile(SingletonModel):
         missing = []
         if not self.about.strip():
             missing.append("About the company")
-        if not self.website:
-            missing.append("Website")
         if not (self.sender_name or "").strip():
             missing.append("Signature name")
         if not self.approved_fact_list and not self.capability_list:

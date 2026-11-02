@@ -18,25 +18,33 @@ from .importers import PRICE_COLUMNS, PRODUCT_COLUMNS, SIZE_COLUMNS, VARIANT_COL
 from .models import CompanyDocument, Material, PriceList, PriceListItem, Product, ProductCategory, ProductImage, ProductVariant
 
 
+def _filtered_products(params):
+    qs = Product.objects.select_related("category")
+    if params.get("category"):
+        qs = qs.filter(category_id=params["category"])
+    if params.get("material"):
+        qs = qs.filter(material=params["material"])
+    if params.get("verified") in ("1", "0"):
+        qs = qs.filter(is_verified=params["verified"] == "1")
+    q = (params.get("q") or "").strip()
+    if q:
+        qs = qs.filter(Q(name__icontains=q) | Q(model_code__icontains=q) | Q(variants__sku__icontains=q)).distinct()
+    return qs
+
+
 def product_list(request):
-    qs = Product.objects.select_related("category").annotate(n_variants=Count("variants"))
     category = request.GET.get("category")
     material = request.GET.get("material")
     verified = request.GET.get("verified")
     q = request.GET.get("q", "").strip()
-    if category:
-        qs = qs.filter(category_id=category)
-    if material:
-        qs = qs.filter(material=material)
-    if verified in ("1", "0"):
-        qs = qs.filter(is_verified=verified == "1")
-    if q:
-        qs = qs.filter(Q(name__icontains=q) | Q(model_code__icontains=q) | Q(variants__sku__icontains=q)).distinct()
+    qs = _filtered_products(request.GET).annotate(n_variants=Count("variants")).order_by("category__sort_order", "name")
+    unverified_shown = _filtered_products(request.GET).filter(is_verified=False).count()
     page = Paginator(qs, 40).get_page(request.GET.get("page"))
     categories = ProductCategory.objects.annotate(n=Count("products"))
     return render(request, "products/product_list.html", {
         "page_obj": page, "categories": categories, "materials": Material.choices,
         "filters": {"category": category or "", "material": material or "", "verified": verified or "", "q": q},
+        "unverified_shown": unverified_shown,
     })
 
 
@@ -77,6 +85,19 @@ def product_edit(request, pk=None):
         "title": f"Edit {product}" if product else "New product",
         "subtitle": "Enter verified company information only.",
     })
+
+
+@manager_required
+@require_POST
+def product_bulk_verify(request):
+    """Verify every unverified product matching the list filter (after the manager has reviewed them)."""
+    products = list(_filtered_products(request.POST).filter(is_verified=False))
+    for product in products:
+        product.mark_verified(request.user)
+    audit("product.bulk_verify", user=request.user, summary=f"{len(products)} products verified",
+          products=[p.pk for p in products][:500])
+    messages.success(request, f"{len(products)} products verified. The AI agents may now reference them.")
+    return redirect("products:product_list")
 
 
 @manager_required

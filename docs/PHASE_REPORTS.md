@@ -1,6 +1,6 @@
 # Phase reports
 
-Test totals: **145 automated tests, all passing on SQLite and on PostgreSQL 16**
+Test totals: **147 automated tests, all passing on SQLite and on PostgreSQL 16**
 (`python manage.py test`). AI and mailbox providers are tested with fakes/mocked HTTP; nothing in
 the test suite calls a real external service.
 
@@ -114,6 +114,10 @@ mobile layout); background worker executed the scheduled jobs, the nightly pipel
 * **Bulk CSV import** for products and for sizes across all products, plus downloadable header-only
   templates for products, sizes, prices and companies. Re-imports with changed technical data reset
   product verification.
+* **Website data import** (`manage.py import_website_data <website repo>`): company profile, 43 products,
+  163 sizes, 43 photos and the catalogue from the FLOTEC website repository - imported unverified, with a
+  manager "Verify all shown" action; certification / export-market / material-safety claims are listed
+  for the owner to confirm instead of being copied. Website data is never committed to this repository.
 * **Live API check** with the owner's key: authentication and access to Opus 5.5 / Sonnet 5.5 /
   Haiku 5.5 confirmed. The first real request returned "credit balance is too low" (no credits on
   the account). That error was being retried; API errors are now mapped centrally and missing
@@ -127,6 +131,6 @@ mobile layout); background worker executed the scheduled jobs, the nightly pipel
 |---|---|---|
 | Live Claude API calls | Key works, but the Anthropic account has no credits yet | Add credits (console.anthropic.com → Plans & Billing), then run one research run (1 country, 3 companies) and one draft; check *Automation → Agent log*. Website verification needs normal internet access (it is blocked in the development container, not on a normal server). |
 | Live mailbox connections | Need the company's OAuth apps and a public HTTPS URL | Follow `docs/EMAIL_SETUP.md`, connect, send one test e-mail to an internal address, reply to it, check the Inbox |
-| Real product, price and company data | Must come from Ajay Plastic (no data was invented) | Enter products/sizes/prices/catalogues and the company profile |
+| Real product, price and company data | Products, sizes, photos, catalogue and company profile now load from the website; prices, MOQs, packaging and commercial terms are not on the website | Manager verifies products; owner confirms the certification/export claims; enter approved price lists and default terms |
 | WhatsApp | The brief says "if integrated"; no WhatsApp Business API account | WhatsApp numbers are stored and WhatsApp conversations can be logged; API integration can be added later |
 | Delivery receipts | Providers do not expose them | Bounce-based reporting is used |

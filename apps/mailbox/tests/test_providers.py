@@ -54,10 +54,13 @@ MSG = OutgoingMessage(from_email="export@flotec.example", from_name="Flotec", to
 class ProviderTests(TestCase):
     def test_tokens_encrypted_at_rest(self):
         acc = account("gmail")
+        acc.access_token = "plain-access-token-value"
+        acc.refresh_token = "plain-refresh-token-value"
+        acc.save()
         raw = MailAccount.objects.filter(pk=acc.pk).values_list("_access_token", "_refresh_token").get()
-        self.assertNotIn("AT", raw[0])
-        self.assertNotIn("RT", raw[1])
-        self.assertEqual(MailAccount.objects.get(pk=acc.pk).access_token, "AT")
+        self.assertNotIn("plain-access-token", raw[0])
+        self.assertNotIn("plain-refresh-token", raw[1])
+        self.assertEqual(MailAccount.objects.get(pk=acc.pk).access_token, "plain-access-token-value")
 
     def test_gmail_send_and_fetch(self):
         acc = account("gmail")
