@@ -9,6 +9,7 @@ from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -406,7 +407,19 @@ def company_import(request):
             messages.warning(request, e)
         return redirect("crm:company_list")
     return render(request, "core/form_page.html", {"form": form, "multipart": True, "title": "Import companies (CSV)",
-                                                   "submit_label": "Import"})
+                                                   "submit_label": "Import",
+                                                   "download_url": reverse("crm:company_import_template"),
+                                                   "download_label": "Download CSV template"})
+
+
+COMPANY_CSV_COLUMNS = ["name", "website", "country", "city", "company_type", "contact_name", "contact_title", "email", "phone",
+                       "source_url", "notes"]
+
+
+def company_import_template(request):
+    resp = HttpResponse("\ufeff" + ",".join(COMPANY_CSV_COLUMNS) + "\r\n", content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = 'attachment; filename="flotec-companies-template.csv"'
+    return resp
 
 
 @editor_required

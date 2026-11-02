@@ -62,6 +62,7 @@
         <a class="dropdown-toggle text-decoration-none text-dark" href="#" data-bs-toggle="dropdown"><i class="bi bi-person-circle"></i> {{ user.get_full_name|default:user.username }} <small class="text-muted">({{ user_role_label }})</small></a>
         <ul class="dropdown-menu dropdown-menu-end">
           <li><a class="dropdown-item" href="{% url 'password_change' %}">Change password</a></li>
+          <li><a class="dropdown-item" href="{% url 'two_factor_setup' %}">Two-step login</a></li>
           <li><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="dropdown-item">Sign out</button></form></li>
         </ul>
       </div>

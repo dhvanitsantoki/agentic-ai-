@@ -12,7 +12,7 @@ from django.views.decorators.http import require_POST
 
 from .audit import audit
 from .forms import CompanyProfileForm, SystemSettingsForm, UserCreateForm, UserEditForm
-from .models import AuditLog, CompanyProfile, LoginAttempt, Notification, SystemSettings
+from .models import AuditLog, CompanyProfile, LoginAttempt, Notification, SystemSettings, has_active_two_factor
 from .permissions import admin_required, is_manager
 
 MAX_FAILED_LOGINS = 5
@@ -36,17 +36,30 @@ class ThrottledLoginView(auth_views.LoginView):
         )
         return failures.count() >= MAX_FAILED_LOGINS
 
+    pending_two_factor = False
+
     def post(self, request, *args, **kwargs):
         username = (request.POST.get("username") or "")[:150]
         ip = _client_ip(request)
         if self._is_throttled(username, ip):
             return render(request, self.template_name, {"throttled": True, "form": self.get_form()}, status=429)
         response = super().post(request, *args, **kwargs)
-        success = request.user.is_authenticated
+        success = request.user.is_authenticated or self.pending_two_factor
         LoginAttempt.objects.create(username=username, ip_address=ip, success=success)
-        if success:
+        if request.user.is_authenticated:
             audit("auth.login", user=request.user, summary=f"Login from {ip}")
         return response
+
+    def form_valid(self, form):
+        """Password is correct. Users with two-step login must still enter their code."""
+        from .two_factor import start_pending_login
+        from .models import has_active_two_factor
+
+        user = form.get_user()
+        if has_active_two_factor(user):
+            self.pending_two_factor = True
+            return start_pending_login(self.request, user, self.get_success_url())
+        return super().form_valid(form)
 
 
 login_view = login_not_required(ThrottledLoginView.as_view())
@@ -78,6 +91,8 @@ def settings_home(request):
             "zoho": bool(settings.ZOHO_OAUTH_CLIENT_ID and settings.ZOHO_OAUTH_CLIENT_SECRET),
         },
         "encryption_key_set": bool(settings.FIELD_ENCRYPTION_KEY),
+        "my_two_factor": has_active_two_factor(request.user),
+        "users_without_2fa": User.objects.filter(is_active=True).exclude(two_factor__confirmed_at__isnull=False).count(),
     })
 
 
@@ -122,7 +137,7 @@ User = get_user_model()
 
 @admin_required
 def user_list(request):
-    users = User.objects.select_related("profile").order_by("username")
+    users = User.objects.select_related("profile", "two_factor").order_by("username")
     return render(request, "core/user_list.html", {"users": users})
 
 

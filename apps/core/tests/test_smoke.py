@@ -20,6 +20,7 @@ PAGES = [
     "products:document_list", "products:document_create", "products:pricelist_list", "products:pricelist_create",
     "reports:list", "agents:control", "agents:job_list", "agents:run_log", "core:settings_home", "core:company_profile",
     "core:system_settings", "core:user_list", "core:user_create", "core:audit_log", "core:notifications", "password_change",
+    "two_factor_setup", "products:product_import", "products:sizes_import",
 ]
 
 

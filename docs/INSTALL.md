@@ -115,8 +115,8 @@ sudo certbot --nginx -d sales.ajayplastic.com
 
 1. **Settings → Company profile** – about text, website, signature, and *only verified* facts,
    capabilities, certifications and OEM services. The agents cannot write outreach until this is complete.
-2. **Products** – add each product with verified specifications, sizes (or CSV import), MOQ,
-   packaging, images, catalogue PDF; a manager clicks **Verify product data**.
+2. **Products** – Products → *Import CSV* (products, then sizes; templates downloadable on each import
+   page) or add them one by one; upload images and catalogue PDFs; a manager clicks **Verify product data**.
 3. **Price lists** – create a list per currency/Incoterm, add prices (or CSV import), **Approve**.
 4. **Catalogues & files** – upload the catalogue, tick *Approved for sending*.
 5. **Settings → Mailboxes** – connect the Zoho / Gmail / Outlook mailbox (OAuth).
@@ -124,7 +124,9 @@ sudo certbot --nginx -d sales.ajayplastic.com
 7. **Settings → System settings** – sending limits, local-hour window, research limits, AI models,
    monthly AI budget, escalation and report e-mail addresses.
 8. **Country markets** – open the target countries and tick *Include in the nightly research rotation*.
-9. **Automation** – keep **Mode 2** at first; click **Resume** (automation starts *paused*).
+9. **Two-step login** – user menu → *Two-step login* for every user; then tick *Require two-step login*
+   in System settings.
+10. **Automation** – keep **Mode 2** at first; click **Resume** (automation starts *paused*).
 
 ## 9. Backups and restore
 

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Two-step login{% endblock %}
+{% block public_content %}
+<div class="container" style="max-width:420px; margin-top:10vh">
+  <div class="text-center mb-4"><h3 class="mb-0"><i class="bi bi-shield-lock text-primary"></i> Two-step login</h3><div class="text-muted">Enter the 6-digit code from your authenticator app</div></div>
+  <div class="card"><div class="card-body p-4">
+    {% if messages %}{% for m in messages %}<div class="alert alert-{% if m.tags == 'error' %}danger{% else %}{{ m.tags|default:'info' }}{% endif %} py-2">{{ m }}</div>{% endfor %}{% endif %}
+    {% if locked %}<div class="alert alert-danger py-2">Too many wrong codes. Please wait 15 minutes, then sign in again.</div><a href="{% url 'login' %}" class="btn btn-outline-secondary w-100">Back to sign in</a>
+    {% else %}
+    {% if error %}<div class="alert alert-danger py-2">{{ error }}</div>{% endif %}
+    <form method="post">{% csrf_token %}
+      <div class="mb-3">{{ form.code }}</div>
+      <button class="btn btn-primary w-100">Verify</button>
+    </form>
+    <div class="small text-muted mt-3">Lost your phone? Enter one of your recovery codes instead, or ask an admin to reset your two-step login.</div>
+    {% endif %}
+  </div></div>
+</div>
+{% endblock %}

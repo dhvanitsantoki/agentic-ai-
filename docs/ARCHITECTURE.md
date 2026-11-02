@@ -180,7 +180,8 @@ are logged and shown on the dashboard.
 
 ## 8. Security
 
-* Django auth with PBKDF2/argon password hashing, password validators, login throttling,
+* Django auth with PBKDF2 password hashing, password validators, login throttling, optional or
+  compulsory two-step login (authenticator app, recovery codes),
   session timeout, CSRF on every form, secure/HTTP-only cookies and HSTS in production.
 * Roles: **Admin** (settings, users, mailboxes, mode, price approval), **Manager** (approvals,
   quotations, discounts, research runs), **Sales executive** (CRM, drafts), **Viewer** (read-only).

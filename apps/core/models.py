@@ -227,6 +227,11 @@ class SystemSettings(SingletonModel):
         help_text="All AI calls stop when the metered spend this calendar month reaches this amount.",
     )
 
+    # Security
+    require_two_factor = models.BooleanField(
+        default=False, help_text="Every user must set up two-step login (authenticator app) before using the system.",
+    )
+
     # Notifications
     escalation_emails = models.TextField(blank=True, help_text="Comma-separated addresses notified of hot leads.")
     report_recipients = models.TextField(blank=True, help_text="Comma-separated addresses that receive the daily report.")
@@ -309,3 +314,73 @@ class LoginAttempt(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class TwoFactorDevice(models.Model):
+    """Authenticator-app (TOTP) device for two-step login. Secret encrypted, recovery codes hashed."""
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="two_factor")
+    _secret = models.TextField(db_column="secret")
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    last_used_step = models.BigIntegerField(null=True, blank=True)
+    recovery_code_hashes = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"2FA for {self.user}"
+
+    @property
+    def secret(self) -> str:
+        from .crypto import decrypt
+
+        return decrypt(self._secret)
+
+    @secret.setter
+    def secret(self, value: str):
+        from .crypto import encrypt
+
+        self._secret = encrypt(value)
+
+    @property
+    def is_active(self) -> bool:
+        return self.confirmed_at is not None
+
+    @staticmethod
+    def _hash_code(code: str) -> str:
+        import hashlib
+
+        normal = "".join(ch for ch in (code or "").lower() if ch.isalnum())
+        return hashlib.sha256(normal.encode()).hexdigest()
+
+    def new_recovery_codes(self, count: int = 10) -> list[str]:
+        import secrets as _secrets
+
+        codes = [f"{_secrets.token_hex(3)}-{_secrets.token_hex(3)}" for _ in range(count)]
+        self.recovery_code_hashes = [self._hash_code(c) for c in codes]
+        self.save(update_fields=["recovery_code_hashes"])
+        return codes
+
+    @property
+    def recovery_codes_left(self) -> int:
+        return len(self.recovery_code_hashes or [])
+
+    def verify(self, code: str) -> str:
+        """Return 'totp', 'recovery' or '' (invalid). Each TOTP code and each recovery code works only once."""
+        from . import totp
+
+        step = totp.verify(self.secret, code, last_step=self.last_used_step)
+        if step is not None:
+            self.last_used_step = step
+            self.save(update_fields=["last_used_step"])
+            return "totp"
+        hashed = self._hash_code(code)
+        if hashed in (self.recovery_code_hashes or []):
+            self.recovery_code_hashes = [h for h in self.recovery_code_hashes if h != hashed]
+            self.save(update_fields=["recovery_code_hashes"])
+            return "recovery"
+        return ""
+
+
+def has_active_two_factor(user) -> bool:
+    device = getattr(user, "two_factor", None) if user and user.is_authenticated else None
+    return bool(device and device.is_active)

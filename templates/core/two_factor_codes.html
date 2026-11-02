@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Recovery codes{% endblock %}
+{% block page_title %}{% if first_time %}Two-step login is on{% else %}New recovery codes{% endif %}{% endblock %}
+{% block page_subtitle %}Save these codes now - they are shown only once. Each code works one time if your phone is not available.{% endblock %}
+{% block content %}
+<div class="card" style="max-width:520px"><div class="card-body">
+  <div class="row row-cols-2 g-2 font-monospace fs-5 mb-3">{% for c in codes %}<div class="col">{{ c }}</div>{% endfor %}</div>
+  {% if not first_time %}<div class="alert alert-warning py-2 small">Your previous recovery codes no longer work.</div>{% endif %}
+  <button class="btn btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
+  <a class="btn btn-primary" href="{% url 'dashboard' %}">I have saved them</a>
+</div></div>
+{% endblock %}

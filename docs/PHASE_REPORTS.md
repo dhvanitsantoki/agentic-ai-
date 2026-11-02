@@ -1,6 +1,6 @@
 # Phase reports
 
-Test totals at completion: **129 automated tests, all passing on SQLite and on PostgreSQL 16**
+Test totals: **145 automated tests, all passing on SQLite and on PostgreSQL 16**
 (`python manage.py test`). AI and mailbox providers are tested with fakes/mocked HTTP; nothing in
 the test suite calls a real external service.
 
@@ -106,15 +106,27 @@ row counts checked); full browser walkthrough with zero console errors (profile 
 approved price list → company/contact → quotation → approval → PDF; pause/stop/resume; reports;
 mobile layout); background worker executed the scheduled jobs, the nightly pipeline and a backup.
 
+## After delivery – additions (2 Nov 2026)
+* **Two-step login (TOTP)** – RFC 6238 implementation verified against the RFC test vectors; QR setup,
+  10 hashed one-time recovery codes, replay protection, 5-attempt lock-out, 5-minute code step,
+  admin reset for lost phones, optional "require for everyone" policy. Browser-verified (setup → sign
+  out → password → code step → recovery code).
+* **Bulk CSV import** for products and for sizes across all products, plus downloadable header-only
+  templates for products, sizes, prices and companies. Re-imports with changed technical data reset
+  product verification.
+* **Live API check** with the owner's key: authentication and access to Opus 5.5 / Sonnet 5.5 /
+  Haiku 5.5 confirmed. The first real request returned "credit balance is too low" (no credits on
+  the account). That error was being retried; API errors are now mapped centrally and missing
+  credits / rejected keys stop immediately with one dashboard notification.
+
 ---
 
 ## Pending / to do at go-live
 
 | Item | Why pending | What to do |
 |---|---|---|
-| Live Claude API calls | No API key in the development environment; request shapes follow the official SDK docs and are covered by fake-client tests | Set `ANTHROPIC_API_KEY`, run one research run (1 country, 3 companies) and one draft; check *Automation → Agent log* |
+| Live Claude API calls | Key works, but the Anthropic account has no credits yet | Add credits (console.anthropic.com → Plans & Billing), then run one research run (1 country, 3 companies) and one draft; check *Automation → Agent log*. Website verification needs normal internet access (it is blocked in the development container, not on a normal server). |
 | Live mailbox connections | Need the company's OAuth apps and a public HTTPS URL | Follow `docs/EMAIL_SETUP.md`, connect, send one test e-mail to an internal address, reply to it, check the Inbox |
 | Real product, price and company data | Must come from Ajay Plastic (no data was invented) | Enter products/sizes/prices/catalogues and the company profile |
 | WhatsApp | The brief says "if integrated"; no WhatsApp Business API account | WhatsApp numbers are stored and WhatsApp conversations can be logged; API integration can be added later |
-| Two-factor login | Not in scope of phase plan | Use strong passwords; can be added (e.g. TOTP) later |
 | Delivery receipts | Providers do not expose them | Bounce-based reporting is used |

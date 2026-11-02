@@ -62,7 +62,7 @@ class SystemSettingsForm(BootstrapFormMixin, forms.ModelForm):
             "research_daily_company_limit", "research_companies_per_run", "research_max_web_searches",
             "ai_model_research", "ai_effort_research", "ai_model_drafting", "ai_effort_drafting",
             "ai_model_classification", "ai_effort_classification", "monthly_ai_budget_usd",
-            "escalation_emails", "report_recipients",
+            "require_two_factor", "escalation_emails", "report_recipients",
         ]
         widgets = {"unsubscribe_footer": forms.Textarea(attrs={"rows": 2})}
 

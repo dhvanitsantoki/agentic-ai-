@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Set up two-step login{% endblock %}
+{% block page_title %}Set up two-step login{% endblock %}
+{% block page_subtitle %}{% if required %}The owner requires two-step login for all users. {% endif %}After your password you will also enter a 6-digit code from your phone.{% endblock %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-7"><div class="card"><div class="card-body">
+    <ol class="mb-3">
+      <li>Install an authenticator app on your phone (Google Authenticator, Microsoft Authenticator, Zoho OneAuth or Authy).</li>
+      <li>In the app choose <b>Add account → Scan QR code</b> and scan this code.</li>
+      <li>Type the 6-digit code the app shows and click <b>Turn on</b>.</li>
+    </ol>
+    <div class="d-flex flex-wrap gap-4 align-items-center">
+      <div class="border rounded p-2 bg-white qr" style="width:230px">{{ qr }}</div>
+      <div class="small"><div class="text-muted">Can't scan? Enter this key manually (time-based):</div><code class="fs-6 user-select-all">{{ secret }}</code></div>
+    </div>
+    <form method="post" class="mt-4" style="max-width:320px">{% csrf_token %}
+      <label class="form-label" for="{{ form.code.id_for_label }}">6-digit code</label>{{ form.code }}
+      {% for e in form.code.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+      <button class="btn btn-primary mt-3 w-100">Turn on two-step login</button>
+    </form>
+  </div></div></div>
+  <div class="col-lg-5"><div class="card"><div class="card-body small text-muted">
+    <p class="mb-2"><b>Why?</b> This system can send e-mails from the company mailbox and holds buyer data and prices. A stolen password alone will not be enough to sign in.</p>
+    <p class="mb-0">After turning it on you get 10 one-time <b>recovery codes</b>. Keep them safe (printed or in a password manager) for when your phone is not available.</p>
+  </div></div></div>
+</div>
+{% endblock %}

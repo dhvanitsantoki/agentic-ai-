@@ -114,3 +114,61 @@ class InlineFormTests(TestCase):
 
         self.client.post("/crm/tasks/new/", {"title": "Call", "company": "", "assigned_to": self.user.pk, "priority": "normal", "due_date": ""})
         self.assertEqual(Task.objects.get().kind, "other")
+
+
+class BulkImportTests(TestCase):
+    def setUp(self):
+        seed_categories()
+        self.user = make_user()
+        self.client.force_login(self.user)
+
+    def _upload(self, url, text):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return self.client.post(url, {"file": SimpleUploadedFile("x.csv", ("﻿" + text).encode(), content_type="text/csv")})
+
+    def test_templates_download_with_headers_only(self):
+        from apps.products.importers import PRODUCT_COLUMNS
+
+        resp = self.client.get("/products/templates/products.csv")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode("utf-8-sig")
+        self.assertEqual(body.strip(), ",".join(PRODUCT_COLUMNS))
+        for kind in ("sizes", "sizes-for-one-product", "prices"):
+            self.assertEqual(self.client.get(f"/products/templates/{kind}.csv").status_code, 200)
+        self.assertEqual(self.client.get("/products/templates/other.csv").status_code, 404)
+        self.assertEqual(self.client.get("/crm/companies/import/template.csv").status_code, 200)
+
+    def test_products_then_sizes_then_prices(self):
+        self._upload("/products/import/",
+                     "category,name,material,pressure_rating,connection_types,default_moq,sample_available,oem_customisable\n"
+                     "PVC Ball Valves,Compact Valve,pvc,PN10,Solvent socket,1000,yes,no\n"
+                     "PP Ball Valves,Compact Valve,PP,PN16,BSP thread,500,no,yes\n"
+                     "Unknown Category,X,PVC,,,,,\n"
+                     "PVC Ball Valves,Bad Material,STEEL,,,,,\n")
+        self.assertEqual(Product.objects.count(), 2)
+        pvc = Product.objects.get(material="PVC")
+        self.assertEqual((pvc.default_moq, pvc.sample_available, pvc.is_verified), (1000, True, False))
+        self._upload("/products/import-sizes/",
+                     "product_name,material,sku,size,size_mm,moq\n"
+                     "Compact Valve,PVC,CV-20,20 mm,20,1000\n"
+                     "Compact Valve,PP,CVP-20,20 mm,20,500\n"
+                     "Compact Valve,,CV-25,25 mm,25,\n"
+                     "Missing,PVC,M-1,1 in,,\n")
+        self.assertEqual(sorted(ProductVariant.objects.values_list("sku", flat=True)), ["CV-20", "CVP-20"],
+                         "ambiguous product name without material and unknown products are rejected")
+        pl = PriceList.objects.create(name="USD list", currency="USD")
+        self._upload(f"/products/prices/{pl.pk}/import/", "sku,unit_price,min_quantity\nCV-20,0.85,1\nCV-20,0.79,5000\nNOPE,1.00,1\n")
+        self.assertEqual(pl.items.count(), 2)
+
+    def test_reimport_with_changed_specs_resets_verification(self):
+        self._upload("/products/import/", "category,name,material,pressure_rating\nPVC Ball Valves,Valve A,PVC,PN10\n")
+        p = Product.objects.get()
+        p.mark_verified(self.user)
+        self._upload("/products/import/", "category,name,material,pressure_rating\nPVC Ball Valves,Valve A,PVC,PN10\n")
+        p.refresh_from_db()
+        self.assertTrue(p.is_verified, "unchanged technical data keeps verification")
+        self._upload("/products/import/", "category,name,material,pressure_rating\nPVC Ball Valves,Valve A,PVC,PN16\n")
+        p.refresh_from_db()
+        self.assertFalse(p.is_verified)
+        self.assertEqual(p.pressure_rating, "PN16")

@@ -9,6 +9,7 @@ urlpatterns = [
     path("companies/", views.company_list, name="company_list"),
     path("companies/new/", views.company_edit, name="company_create"),
     path("companies/import/", views.company_import, name="company_import"),
+    path("companies/import/template.csv", views.company_import_template, name="company_import_template"),
     path("companies/<int:pk>/", views.company_detail, name="company_detail"),
     path("companies/<int:pk>/edit/", views.company_edit, name="company_edit"),
     path("companies/<int:pk>/stage/", views.company_stage, name="company_stage"),

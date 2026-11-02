@@ -92,6 +92,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django.contrib.auth.middleware.LoginRequiredMiddleware",
     "apps.core.middleware.ReadOnlyViewerMiddleware",
+    "apps.core.two_factor.TwoFactorRequiredMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"

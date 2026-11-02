@@ -4,6 +4,7 @@ from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from apps.core.audit import audit
@@ -13,6 +14,7 @@ from .forms import (
     CategoryForm, CsvUploadForm, DocumentForm, ImageForm, PriceItemForm, PriceListForm, ProductForm,
     VariantAddForm, VariantForm, parse_decimal,
 )
+from .importers import PRICE_COLUMNS, PRODUCT_COLUMNS, SIZE_COLUMNS, VARIANT_COLUMNS, import_products, import_sizes
 from .models import CompanyDocument, Material, PriceList, PriceListItem, Product, ProductCategory, ProductImage, ProductVariant
 
 
@@ -148,27 +150,7 @@ def variant_import(request, pk):
         except ValidationError as exc:
             messages.error(request, exc.messages[0])
             return redirect("products:variant_import", pk=pk)
-        created, updated, errors = 0, 0, []
-        for i, row in enumerate(rows, start=2):
-            sku, size = row.get("sku"), row.get("size")
-            if not sku or not size:
-                errors.append(f"Row {i}: sku and size are required")
-                continue
-            defaults = {
-                "product": product, "size": size,
-                "size_mm": parse_decimal(row.get("size_mm", "")) if row.get("size_mm") else None,
-                "pressure_rating": row.get("pressure_rating", ""), "connection_type": row.get("connection_type", ""),
-                "moq": int(row["moq"]) if row.get("moq", "").isdigit() else None,
-                "packaging": row.get("packaging", ""),
-                "unit_weight_g": parse_decimal(row.get("unit_weight_g", "")) if row.get("unit_weight_g") else None,
-            }
-            existing = ProductVariant.objects.filter(sku=sku).first()
-            if existing and existing.product_id != product.pk:
-                errors.append(f"Row {i}: SKU {sku} belongs to another product")
-                continue
-            _, was_created = ProductVariant.objects.update_or_create(sku=sku, defaults=defaults)
-            created += was_created
-            updated += not was_created
+        created, updated, errors = import_sizes(rows, product)
         audit("product.variant_import", product, user=request.user, summary=f"{created} created, {updated} updated",
               errors=errors[:50])
         messages.success(request, f"Import finished: {created} created, {updated} updated, {len(errors)} errors.")
@@ -177,8 +159,8 @@ def variant_import(request, pk):
         return redirect("products:product_detail", pk=pk)
     return render(request, "core/form_page.html", {
         "form": form, "multipart": True, "title": f"Import sizes for {product}",
-        "subtitle": "CSV columns: sku, size, size_mm, pressure_rating, connection_type, moq, packaging, unit_weight_g",
-        "submit_label": "Import",
+        "subtitle": "CSV columns: " + ", ".join(VARIANT_COLUMNS), "submit_label": "Import",
+        "download_url": reverse("products:csv_template", args=["sizes-for-one-product"]), "download_label": "Download CSV template",
     })
 
 
@@ -374,6 +356,7 @@ def pricelist_import(request, pk):
     return render(request, "core/form_page.html", {
         "form": form, "multipart": True, "title": f"Import prices into {pl.name}",
         "subtitle": "CSV columns: sku, unit_price, min_quantity (optional)", "submit_label": "Import",
+        "download_url": reverse("products:csv_template", args=["prices"]), "download_label": "Download CSV template",
     })
 
 
@@ -411,3 +394,60 @@ def pricelist_action(request, pk):
         messages.success(request, "Draft copy created. Edit it, then approve it.")
         return redirect("products:pricelist_detail", pk=new.pk)
     return redirect("products:pricelist_detail", pk=pk)
+
+
+CSV_TEMPLATES = {
+    "products": PRODUCT_COLUMNS,
+    "sizes": SIZE_COLUMNS,
+    "sizes-for-one-product": VARIANT_COLUMNS,
+    "prices": PRICE_COLUMNS,
+}
+
+
+def csv_template(request, kind):
+    """Header-only CSV (UTF-8 with BOM so Excel opens it correctly)."""
+    from django.http import Http404, HttpResponse
+
+    columns = CSV_TEMPLATES.get(kind)
+    if columns is None:
+        raise Http404("Unknown template")
+    resp = HttpResponse("\ufeff" + ",".join(columns) + "\r\n", content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = f'attachment; filename="flotec-{kind}-template.csv"'
+    return resp
+
+
+def _bulk_import(request, *, title, columns, template_kind, importer, action, extra_help=""):
+    form = CsvUploadForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and form.is_valid():
+        try:
+            rows = form.read_rows()
+        except ValidationError as exc:
+            messages.error(request, exc.messages[0])
+            return redirect(request.path)
+        created, updated, errors = importer(rows)
+        audit(action, user=request.user, summary=f"{created} created, {updated} updated, {len(errors)} errors", errors=errors[:50])
+        messages.success(request, f"Import finished: {created} created, {updated} updated, {len(errors)} rows with errors.")
+        for e in errors[:15]:
+            messages.warning(request, e)
+        return redirect("products:product_list")
+    return render(request, "core/form_page.html", {
+        "form": form, "multipart": True, "title": title, "submit_label": "Import",
+        "subtitle": f"CSV columns: {', '.join(columns)}. {extra_help}",
+        "download_url": reverse("products:csv_template", args=[template_kind]), "download_label": "Download CSV template",
+    })
+
+
+@editor_required
+def product_import(request):
+    cats = ", ".join(ProductCategory.objects.values_list("name", flat=True))
+    return _bulk_import(request, title="Import products (CSV)", columns=PRODUCT_COLUMNS, template_kind="products",
+                        importer=import_products, action="product.import",
+                        extra_help=f"Category must be one of: {cats}. Material: PP, PVC, UPVC, CPVC, RPVC, HDPE, LDPE, ABS, OTHER. "
+                                   "sample_available / oem_customisable: yes or no. Imported products start as not verified.")
+
+
+@editor_required
+def sizes_import(request):
+    return _bulk_import(request, title="Import sizes for all products (CSV)", columns=SIZE_COLUMNS, template_kind="sizes",
+                        importer=import_sizes, action="product.sizes_import",
+                        extra_help="product_name must match an existing product (add material if two products share a name). SKU must be unique.")

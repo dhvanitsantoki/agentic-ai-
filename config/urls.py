@@ -4,6 +4,7 @@ from django.contrib.auth import views as auth_views
 from django.urls import include, path, re_path
 from django.views.static import serve
 
+from apps.core import two_factor
 from apps.core import views as core_views
 from apps.outreach import views as outreach_views
 from apps.reports import views as report_views
@@ -14,6 +15,9 @@ urlpatterns = [
     path("", report_views.dashboard, name="dashboard"),
     path("accounts/login/", core_views.login_view, name="login"),
     path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("accounts/two-factor/", two_factor.setup, name="two_factor_setup"),
+    path("accounts/two-factor/verify/", two_factor.verify, name="two_factor_verify"),
+    path("accounts/two-factor/manage/", two_factor.manage, name="two_factor_manage"),
     path("accounts/password/", auth_views.PasswordChangeView.as_view(), name="password_change"),
     path("accounts/password/done/", auth_views.PasswordChangeDoneView.as_view(), name="password_change_done"),
     path("healthz", core_views.healthz, name="healthz"),

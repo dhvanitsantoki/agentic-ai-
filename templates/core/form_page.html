@@ -2,6 +2,7 @@
 {% block title %}{{ title }}{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 {% block page_subtitle %}{{ subtitle|default:"" }}{% endblock %}
+{% block page_actions %}{% if download_url %}<a class="btn btn-sm btn-outline-success" href="{{ download_url }}"><i class="bi bi-download"></i> {{ download_label|default:"Download template" }}</a>{% endif %}{% endblock %}
 {% block content %}
 <div class="card"><div class="card-body">
 <form method="post" {% if multipart %}enctype="multipart/form-data"{% endif %}>{% csrf_token %}

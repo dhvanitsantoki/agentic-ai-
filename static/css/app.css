@@ -33,3 +33,4 @@ body { background: #f4f6f9; font-size: .925rem; }
   .app-sidebar.show { transform: translateX(0); }
   .app-main { margin-left: 0; }
 }
+.qr svg { width: 100%; height: auto; display: block; }

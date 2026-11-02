@@ -3,7 +3,7 @@
 {% block page_title %}Users &amp; roles{% endblock %}
 {% block page_actions %}<a class="btn btn-primary btn-sm" href="{% url 'core:user_create' %}"><i class="bi bi-plus"></i> New user</a>{% endblock %}
 {% block content %}
-<div class="card"><table class="table mb-0 align-middle"><thead><tr><th>Username</th><th>Name</th><th>E-mail</th><th>Role</th><th>Active</th><th>Last login</th><th></th></tr></thead><tbody>
-{% for u in users %}<tr><td>{{ u.username }}</td><td>{{ u.get_full_name }}</td><td>{{ u.email }}</td><td>{% if u.is_superuser %}Admin (superuser){% else %}{{ u.profile.get_role_display }}{% endif %}</td><td>{{ u.is_active|yesno:"Yes,No" }}</td><td>{{ u.last_login|default:"—" }}</td><td><a href="{% url 'core:user_edit' u.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a></td></tr>{% endfor %}
+<div class="card"><table class="table mb-0 align-middle"><thead><tr><th>Username</th><th>Name</th><th>E-mail</th><th>Role</th><th>Two-step login</th><th>Active</th><th>Last login</th><th></th></tr></thead><tbody>
+{% for u in users %}<tr><td>{{ u.username }}</td><td>{{ u.get_full_name }}</td><td>{{ u.email }}</td><td>{% if u.is_superuser %}Admin (superuser){% else %}{{ u.profile.get_role_display }}{% endif %}</td><td>{% if u.two_factor.is_active %}<span class="badge bg-success">on</span> <form class="d-inline" method="post" action="{% url 'core:user_reset_2fa' u.pk %}">{% csrf_token %}<button class="btn btn-link btn-sm p-0 text-danger" data-confirm="Reset two-step login for {{ u.username }} (e.g. lost phone)? They will set it up again at next sign-in.">reset</button></form>{% else %}<span class="badge bg-secondary">off</span>{% endif %}</td><td>{{ u.is_active|yesno:"Yes,No" }}</td><td>{{ u.last_login|default:"—" }}</td><td><a href="{% url 'core:user_edit' u.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a></td></tr>{% endfor %}
 </tbody></table></div>
 {% endblock %}

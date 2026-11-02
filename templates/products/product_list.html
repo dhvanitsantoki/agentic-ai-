@@ -4,7 +4,9 @@
 {% block page_subtitle %}Verified Flotec products, sizes and documents. Only verified products are used by the AI agents.{% endblock %}
 {% block page_actions %}
 <a class="btn btn-outline-secondary btn-sm" href="{% url 'products:category_list' %}"><i class="bi bi-tags"></i> Categories</a>
-{% if user_can_edit %}<a class="btn btn-primary btn-sm" href="{% url 'products:product_create' %}"><i class="bi bi-plus"></i> New product</a>{% endif %}
+{% if user_can_edit %}<div class="dropdown"><button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown"><i class="bi bi-upload"></i> Import CSV</button>
+<ul class="dropdown-menu dropdown-menu-end"><li><a class="dropdown-item" href="{% url 'products:product_import' %}">1. Products</a></li><li><a class="dropdown-item" href="{% url 'products:sizes_import' %}">2. Sizes / SKUs</a></li><li><a class="dropdown-item" href="{% url 'products:pricelist_list' %}">3. Prices (open a draft price list → Import CSV)</a></li></ul></div>
+<a class="btn btn-primary btn-sm" href="{% url 'products:product_create' %}"><i class="bi bi-plus"></i> New product</a>{% endif %}
 {% endblock %}
 {% block content %}
 <form class="card card-body mb-3 py-2" method="get"><div class="row g-2 align-items-end">

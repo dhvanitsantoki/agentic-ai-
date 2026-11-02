@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Two-step login{% endblock %}
+{% block page_title %}Two-step login <span class="badge bg-success fs-6 align-middle">On</span>{% endblock %}
+{% block page_subtitle %}Turned on {{ device.confirmed_at|date:"d M Y H:i" }} · {{ device.recovery_codes_left }} recovery code(s) left{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px"><div class="card-body">
+  <p class="small text-muted">Both actions need a current code from your authenticator app.</p>
+  <form method="post" action="{% url 'two_factor_manage' %}" class="row g-2 align-items-end">{% csrf_token %}
+    <div class="col-sm-5"><label class="form-label small">Current code</label>{{ form.code }}</div>
+    <div class="col-sm-7 d-flex gap-2">
+      <button class="btn btn-outline-primary" name="action" value="codes">New recovery codes</button>
+      {% if not required %}<button class="btn btn-outline-danger" name="action" value="disable" data-confirm="Switch off two-step login?">Switch off</button>{% endif %}
+    </div>
+  </form>
+  {% if required %}<div class="small text-muted mt-3">The owner requires two-step login, so it cannot be switched off. If you change phone, ask an admin to reset it and set it up again.</div>{% endif %}
+</div></div>
+{% endblock %}

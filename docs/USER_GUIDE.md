@@ -9,6 +9,29 @@
 | **Sales executive** | CRM work, research runs, AI drafts, approve *plain* e-mails (no prices, terms, certifications or technical claims), prepare quotations |
 | **Viewer** | read everything, change nothing |
 
+## Two-step login
+
+User menu (top right) → **Two-step login**: scan the QR code with an authenticator app (Google
+Authenticator, Microsoft Authenticator, Zoho OneAuth, Authy) and type the 6-digit code. You get 10
+one-time recovery codes — print them or keep them in a password manager. After that, every sign-in
+asks for the current code after the password.
+
+* Lost phone: sign in with a recovery code, or ask an admin to **reset** it (Settings → Users).
+* The owner can make it compulsory for everyone: Settings → System settings → *Require two-step login*.
+* Five wrong codes lock that sign-in for 15 minutes.
+
+## Loading products and prices from Excel
+
+Products → **Import CSV** (save the Excel sheet as *CSV UTF-8*). Each import page has a
+**Download CSV template** button with the exact column headings.
+
+1. **Products** – one row per product: category (exact name), name, material, specifications, MOQ …
+2. **Sizes / SKUs** – one row per size: product name (+ material), SKU, size, MOQ, packaging …
+3. **Prices** – create a price list per currency, open it, **Import CSV** (sku, unit_price, min_quantity), then **Approve**.
+
+Imported products start as *not verified*; a manager checks each one and clicks **Verify product data**.
+Re-importing a product with changed technical data resets its verification.
+
 ## The daily routine (15–30 minutes)
 
 1. **Dashboard** – "Needs a decision" lists e-mails and quotations waiting for you, follow-ups due,
