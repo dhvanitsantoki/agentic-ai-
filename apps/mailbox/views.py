@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from apps.agents.llm import ai_configured
+from apps.agents.llm import ai_configured, not_configured_message
 from apps.agents.registry import enqueue
 from apps.core.audit import audit
 from apps.core.forms import BootstrapFormMixin
@@ -138,7 +138,7 @@ def inbound_detail(request, pk):
     inbound = get_object_or_404(InboundEmail.objects.select_related("company", "contact", "account", "matched_outbound"), pk=pk)
     return render(request, "mailbox/inbound_detail.html", {
         "inbound": inbound, "classes": Classification.choices, "drafts": inbound.draft_replies.all(),
-        "requirements": inbound.requirements.all(), "quotations": inbound.quotations.all(), "ai": ai_configured(),
+        "requirements": inbound.requirements.all(), "quotations": inbound.quotations.all(), "ai": ai_configured("drafting"),
     })
 
 
@@ -173,8 +173,8 @@ def inbound_action(request, pk):
             audit("email.reclassified", inbound, user=request.user, summary=f"{old} → {cls}")
             messages.success(request, "Classification updated and CRM adjusted.")
     elif action == "draft_reply":
-        if not ai_configured():
-            messages.error(request, "AI is not configured.")
+        if not ai_configured("drafting"):
+            messages.error(request, not_configured_message("drafting"))
         elif inbound.company_id is None:
             messages.error(request, "Link the e-mail to a company first.")
         else:

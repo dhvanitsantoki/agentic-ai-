@@ -1,6 +1,6 @@
 # Phase reports
 
-Test totals: **147 automated tests, all passing on SQLite and on PostgreSQL 16**
+Test totals: **175 automated tests, all passing on SQLite and on PostgreSQL 16**
 (`python manage.py test`). AI and mailbox providers are tested with fakes/mocked HTTP; nothing in
 the test suite calls a real external service.
 
@@ -118,6 +118,16 @@ mobile layout); background worker executed the scheduled jobs, the nightly pipel
   163 sizes, 43 photos and the catalogue from the FLOTEC website repository - imported unverified, with a
   manager "Verify all shown" action; certification / export-market / material-safety claims are listed
   for the owner to confirm instead of being copied. Website data is never committed to this repository.
+* **OpenRouter as a second AI provider** – e-mail drafting, reply classification and report summaries can
+  run on OpenRouter (choice per task in System settings; default `openrouter/free`, fallback models
+  supported). JSON-schema output is validated locally with one repair attempt; tokens and the cost
+  OpenRouter reports are metered on each agent run and count towards the monthly budget; rejected
+  keys, missing credits, privacy-blocked free models and unknown models stop with one dashboard
+  notification; the free daily limit makes jobs wait until the reset without using up their retries.
+  Research stays on Anthropic. Request/response handling is tested with mocked HTTP only - the
+  development container cannot reach openrouter.ai, so the first live call happens on the server.
+* **Fix:** the nightly draft batch did not stop when the Anthropic account ran out of credits (it tried
+  every company); it now stops on any provider-wide problem (credits, key, quota, budget, stop).
 * **Live API check** with the owner's key: authentication and access to Opus 5.5 / Sonnet 5.5 /
   Haiku 5.5 confirmed. The first real request returned "credit balance is too low" (no credits on
   the account). That error was being retried; API errors are now mapped centrally and missing
@@ -129,6 +139,7 @@ mobile layout); background worker executed the scheduled jobs, the nightly pipel
 
 | Item | Why pending | What to do |
 |---|---|---|
+| Live OpenRouter call | Key stored in the development `.env`; openrouter.ai is not reachable from the development container | On the server: put `OPENROUTER_API_KEY` in `.env`, restart, keep *AI provider* = OpenRouter for drafting/classification, then draft one e-mail (company page → *Draft e-mail (AI)*) and check *Automation → Agent log* |
 | Live Claude API calls | Key works, but the Anthropic account has no credits yet | Add credits (console.anthropic.com → Plans & Billing), then run one research run (1 country, 3 companies) and one draft; check *Automation → Agent log*. Website verification needs normal internet access (it is blocked in the development container, not on a normal server). |
 | Live mailbox connections | Need the company's OAuth apps and a public HTTPS URL | Follow `docs/EMAIL_SETUP.md`, connect, send one test e-mail to an internal address, reply to it, check the Inbox |
 | Real product, price and company data | Products, sizes, photos, catalogue and company profile now load from the website; prices, MOQs, packaging and commercial terms are not on the website | Manager verifies products; owner confirms the certification/export claims; enter approved price lists and default terms |

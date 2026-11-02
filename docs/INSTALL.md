@@ -51,7 +51,8 @@ Edit `/srv/flotec/app/.env`:
 | `DJANGO_ALLOWED_HOSTS`, `SITE_URL`, `DJANGO_CSRF_TRUSTED_ORIGINS` | your domain, e.g. `sales.ajayplastic.com` / `https://sales.ajayplastic.com` |
 | `DATABASE_URL` | `postgresql://flotec:<password>@localhost:5432/flotec` |
 | `FIELD_ENCRYPTION_KEY` | output of `.venv/bin/python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"` — **store a copy safely**; losing it means reconnecting mailboxes |
-| `ANTHROPIC_API_KEY` | from console.anthropic.com → API keys (leave empty to run without AI) |
+| `ANTHROPIC_API_KEY` | from console.anthropic.com → API keys (leave empty to run without AI). Needed for buyer/OEM/country research |
+| `OPENROUTER_API_KEY` | optional, from openrouter.ai → Keys. Lets e-mail drafting, reply classification and report summaries run on OpenRouter models (System settings → *AI provider*) |
 | `ZOHO_*`, `GOOGLE_*`, `MS_*` | OAuth apps — see `docs/EMAIL_SETUP.md` |
 | `EMAIL_*` | SMTP account used only for internal notifications (escalations, daily report) |
 | `MEDIA_ROOT`, `BACKUP_DIR`, `LOG_DIR` | `/srv/flotec/media`, `/srv/flotec/backups`, `/srv/flotec/logs` |
@@ -208,7 +209,9 @@ In a second terminal: `.venv/bin/python manage.py run_worker`. Run the test suit
 | Symptom | Check |
 |---|---|
 | Nothing happens automatically | `systemctl status flotec-worker`; Automation page shows "no job has run yet"; automation state is *Paused* on a fresh install |
-| "AI not configured" badge | `ANTHROPIC_API_KEY` in `.env`, then restart both services |
+| "AI not configured" badge | `ANTHROPIC_API_KEY` / `OPENROUTER_API_KEY` in `.env`, then restart both services; the Automation page shows which provider each task uses and whether its key is set |
+| "OpenRouter ... privacy settings" | free models need the free-endpoint option enabled at openrouter.ai/settings/privacy, or choose other models in System settings |
+| "AI paused: OpenRouter daily limit reached" | the free daily request limit is used up; jobs wait and continue automatically after the reset (or add OpenRouter credits for a higher limit) |
 | AI jobs fail with "budget reached" | raise the monthly budget in System settings |
 | Mailbox shows *Error* | token revoked or expired → **Reconnect** on the Mailboxes page |
 | E-mails stay *Approved* | outside the recipient's local business hours, daily/hourly limit reached, automation stopped, or no mailbox connected — the e-mail page shows the reason |

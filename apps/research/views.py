@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from apps.agents.llm import ai_configured
+from apps.agents.llm import ai_configured, not_configured_message
 from apps.agents.registry import enqueue
 from apps.core.audit import audit
 from apps.core.permissions import editor_required
@@ -42,8 +42,8 @@ def run_create(request):
         initial["kind"] = request.GET["kind"]
     form = ResearchRunForm(request.POST or None, initial=initial)
     if request.method == "POST" and form.is_valid():
-        if not ai_configured():
-            messages.error(request, "AI is not configured (ANTHROPIC_API_KEY). Research runs cannot start.")
+        if not ai_configured("research"):
+            messages.error(request, not_configured_message("research"))
             return redirect("research:run_list")
         d = form.cleaned_data
         with transaction.atomic():
@@ -90,8 +90,8 @@ def run_cancel(request, pk):
 @require_POST
 def deep_dive(request, pk):
     company = get_object_or_404(Company, pk=pk)
-    if not ai_configured():
-        messages.error(request, "AI is not configured (ANTHROPIC_API_KEY).")
+    if not ai_configured("research"):
+        messages.error(request, not_configured_message("research"))
         return redirect(company)
     run = ResearchRun.objects.create(kind=ResearchRun.Kind.DEEP_DIVE, company=company, target_count=1, triggered_by=request.user)
     if company.country_id:
@@ -105,8 +105,8 @@ def deep_dive(request, pk):
 @require_POST
 def country_report(request, iso2):
     country = get_object_or_404(Country, iso2=iso2.upper())
-    if not ai_configured():
-        messages.error(request, "AI is not configured (ANTHROPIC_API_KEY).")
+    if not ai_configured("research"):
+        messages.error(request, not_configured_message("research"))
         return redirect("geo:country_detail", iso2=country.iso2)
     run = ResearchRun.objects.create(kind=ResearchRun.Kind.COUNTRY, target_count=1, triggered_by=request.user)
     run.countries.set([country])

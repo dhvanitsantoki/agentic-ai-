@@ -65,16 +65,24 @@ def run_job(job: Job) -> Job:
         job.last_error = str(exc)
     except Exception as exc:  # noqa: BLE001 - every failure is recorded on the job
         job.last_error = f"{exc.__class__.__name__}: {exc}\n\n{traceback.format_exc()[-4000:]}"
-        if job.attempts < job.max_attempts and not getattr(exc, "permanent", False):
+        retry_at = getattr(exc, "retry_at", None)  # provider quota used up: wait, without using an attempt
+        if retry_at is not None:
+            job.status = Job.Status.QUEUED
+            job.run_after = retry_at
+            job.attempts = max(0, job.attempts - 1)
+        elif job.attempts < job.max_attempts and not getattr(exc, "permanent", False):
             job.status = Job.Status.QUEUED
             job.run_after = timezone.now() + timezone.timedelta(minutes=2 ** job.attempts)
         else:
             job.status = Job.Status.FAILED
             _notify_failure(job, exc)
-        log.exception("job %s (%s) failed", job.pk, job.kind)
+        if retry_at is not None:
+            log.warning("job %s (%s) waits until %s: %s", job.pk, job.kind, retry_at, exc)
+        else:
+            log.exception("job %s (%s) failed", job.pk, job.kind)
     job.finished_at = timezone.now()
     job.locked_by = ""
-    job.save(update_fields=["status", "result", "last_error", "run_after", "finished_at", "locked_by"])
+    job.save(update_fields=["status", "result", "last_error", "run_after", "finished_at", "locked_by", "attempts"])
     return job
 
 

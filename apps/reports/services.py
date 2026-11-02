@@ -30,7 +30,7 @@ def write_narrative(snap: ReportSnapshot, job=None) -> str:
               "Use ONLY the numbers below; do not estimate, extrapolate or add facts. Mention pending approvals and agent errors "
               f"if non-zero.\n\nPERIOD: {snap.get_period_display()} {snap.start} to {snap.end}\nMETRICS:\n{json.dumps(snap.metrics, default=str)}")
     with agent_run(AgentName.REPORT, "report.narrative", snap, job) as tracker:
-        data = structured_call(tracker, model=sys.ai_model_classification, effort="low",
+        data = structured_call(tracker, task="classification", model=sys.ai_model_classification, effort="low",
                                system="You are a precise sales-operations analyst. Plain business English.",
                                user_content=prompt, schema=NARRATIVE_SCHEMA, max_tokens=2000)
     text = data["summary"]
@@ -45,7 +45,7 @@ def generate_report(period: str = "daily", ref_date=None, *, narrative: bool = T
     start, end = metrics.period_bounds(period, ref_date)
     data = metrics.compute(start, end)
     snap, _ = ReportSnapshot.objects.update_or_create(period=period, start=start, defaults={"end": end, "metrics": data})
-    if narrative and ai_configured():
+    if narrative and ai_configured("classification"):
         try:
             snap.narrative = write_narrative(snap, job)
             snap.save(update_fields=["narrative"])

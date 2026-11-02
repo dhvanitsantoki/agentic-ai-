@@ -30,7 +30,7 @@ legal or technical commitment is involved.
 | Web framework | **Django 5.2 LTS** (supported to April 2028) | Built-in auth, permissions, ORM, migrations, admin, CSRF/XSS protection |
 | Database | **PostgreSQL 16** (production), SQLite (development/tests) | Reliable, free, `SELECT … FOR UPDATE SKIP LOCKED` for the job queue |
 | Background jobs | Built-in DB job queue + cron scheduler (`manage.py run_worker`) using `croniter` | No Redis/Celery to run or pay for; pause/resume/stop is a DB flag |
-| AI model | **Anthropic Claude API** — default `claude-opus-5-5`, configurable per agent in Settings (e.g. `claude-sonnet-5-5` / `claude-haiku-5-5` to cut cost) | Server-side web search & web fetch tools for research with source URLs; structured outputs for reliable JSON |
+| AI model | **Anthropic Claude API** — default `claude-opus-5-5`, configurable per agent in Settings (e.g. `claude-sonnet-5-5` / `claude-haiku-5-5` to cut cost) | Server-side web search & web fetch tools for research with source URLs; structured outputs for reliable JSON. Optional: **OpenRouter** (incl. free models) for e-mail drafting, reply classification and report summaries, chosen per task in Settings — research always stays on Claude |
 | E-mail | Gmail API, Microsoft Graph, Zoho Mail API — **OAuth 2.0 only**, tokens encrypted at rest (Fernet) | Official APIs, no passwords stored |
 | UI | Server-rendered Django templates, Bootstrap 5, HTMX, Chart.js (all vendored locally) | Fast, responsive, no JS build step, works on mobile |
 | Documents | ReportLab (PDF quotations & reports), openpyxl (Excel exports) | Pure-Python, no external services |
@@ -135,7 +135,8 @@ generated on approval and sending always requires approval.
 
 | Integration | Needed | Where |
 |---|---|---|
-| Anthropic API key | Yes, for AI features (the CRM, products, quotations and reports work without it) | console.anthropic.com → API keys; set `ANTHROPIC_API_KEY` |
+| Anthropic API key | Yes, for AI research (the CRM, products, quotations and reports work without it) | console.anthropic.com → API keys; set `ANTHROPIC_API_KEY` |
+| OpenRouter API key | Optional: drafting / classification / report summaries on OpenRouter models | openrouter.ai → Keys; set `OPENROUTER_API_KEY`, then choose the provider in System settings |
 | Zoho Mail | If the company uses Zoho | api-console.zoho.in (India DC) → *Server-based application*; scopes `ZohoMail.messages.ALL, ZohoMail.accounts.READ, ZohoMail.folders.READ` |
 | Gmail / Google Workspace | If used | Google Cloud console → OAuth client (Web); Gmail API enabled; scope `gmail.modify`. Workspace: set consent screen to *Internal* (no Google verification needed) |
 | Microsoft 365 / Outlook | If used | Entra ID app registration (Web); delegated `Mail.ReadWrite`, `Mail.Send`, `offline_access`, `User.Read` |

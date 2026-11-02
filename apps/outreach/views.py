@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from apps.agents.llm import ai_configured
+from apps.agents.llm import ai_configured, not_configured_message
 from apps.agents.registry import enqueue
 from apps.core import policy
 from apps.core.audit import audit
@@ -154,8 +154,8 @@ def email_decide(request, pk):
 @require_POST
 def draft_for_company(request, pk):
     company = get_object_or_404(Company, pk=pk)
-    if not ai_configured():
-        messages.error(request, "AI is not configured (ANTHROPIC_API_KEY).")
+    if not ai_configured("drafting"):
+        messages.error(request, not_configured_message("drafting"))
         return redirect(company)
     contact = company.contacts.filter(pk=request.POST.get("contact")).first()
     if contact is None or not contact.is_emailable:

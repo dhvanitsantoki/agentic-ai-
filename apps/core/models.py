@@ -170,6 +170,11 @@ MODEL_CHOICES = [
     ("claude-haiku-5-5", "Claude Haiku 5.5 (lowest cost, $0.10/$0.50 per M tokens)"),
 ]
 EFFORT_CHOICES = [("low", "Low"), ("medium", "Medium"), ("high", "High")]
+PROVIDER_CHOICES = [
+    ("anthropic", "Anthropic Claude (uses the Claude model chosen above)"),
+    ("openrouter", "OpenRouter (uses the OpenRouter models below)"),
+]
+DEFAULT_OPENROUTER_MODELS = "openrouter/free"
 
 
 def default_auto_send_kinds():
@@ -220,6 +225,21 @@ class SystemSettings(SingletonModel):
     ai_effort_research = models.CharField(max_length=10, choices=EFFORT_CHOICES, default="medium")
     ai_effort_drafting = models.CharField(max_length=10, choices=EFFORT_CHOICES, default="low")
     ai_effort_classification = models.CharField(max_length=10, choices=EFFORT_CHOICES, default="low")
+    ai_provider_drafting = models.CharField(
+        "AI provider for e-mail drafting", max_length=20, choices=PROVIDER_CHOICES, default="anthropic",
+    )
+    ai_provider_classification = models.CharField(
+        "AI provider for reply classification and report summaries", max_length=20, choices=PROVIDER_CHOICES,
+        default="anthropic",
+        help_text="Buyer, OEM and country research always use Anthropic (they need its web search and fetch tools).",
+    )
+    openrouter_models = models.CharField(
+        "OpenRouter models", max_length=500, default=DEFAULT_OPENROUTER_MODELS,
+        help_text="Comma-separated OpenRouter model IDs; the first is preferred, the others are fallbacks. "
+                  "'openrouter/free' picks a free model that supports structured output. Free models are rate-limited "
+                  "and their providers may log or train on what is sent (including buyer e-mails) - check "
+                  "openrouter.ai/settings/privacy.",
+    )
     monthly_ai_budget_usd = models.DecimalField(
         max_digits=10, decimal_places=2, default=100,
         help_text="All AI calls stop when the metered spend this calendar month reaches this amount.",

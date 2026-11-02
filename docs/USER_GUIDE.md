@@ -32,6 +32,23 @@ Products → **Import CSV** (save the Excel sheet as *CSV UTF-8*). Each import p
 Imported products start as *not verified*; a manager checks each one and clicks **Verify product data**.
 Re-importing a product with changed technical data resets its verification.
 
+## AI providers (System settings)
+
+| Task | Provider |
+|---|---|
+| Buyer, OEM and country research | always Anthropic Claude (it needs Anthropic's web search and page-fetch tools) |
+| E-mail drafting (introductions, follow-ups, replies) | Anthropic or OpenRouter (*AI provider for e-mail drafting*) |
+| Reply classification and report summaries | Anthropic or OpenRouter (*AI provider for reply classification…*) |
+
+With OpenRouter, *OpenRouter models* lists the model IDs to use (first preferred, the others as
+fallbacks); `openrouter/free` picks a free model that supports structured output. Every answer is
+checked against the expected format and repaired once, and the same safety rules apply as with
+Claude: grounding in approved facts, unsupported-number flags, sensitive-topic detection and human
+approval. Free models are weaker, rate-limited (a small number of requests per day) and their
+providers may log or train on what is sent, including buyer e-mails — use them for testing, or
+use paid OpenRouter/Claude models for daily work. When the daily limit is used up, jobs wait and
+continue automatically after the reset.
+
 ## The daily routine (15–30 minutes)
 
 1. **Dashboard** – "Needs a decision" lists e-mails and quotations waiting for you, follow-ups due,

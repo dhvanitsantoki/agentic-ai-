@@ -9,8 +9,9 @@ import re
 from django.db.models import Q
 from django.utils import timezone
 
-from apps.agents.llm import agent_run, structured_call
+from apps.agents.llm import AIQuotaReached, AIUnavailable, BudgetExceeded, agent_run, structured_call
 from apps.agents.models import AgentName
+from apps.agents.registry import AutomationHalted
 from apps.core import policy
 from apps.core.models import CompanyProfile, SystemSettings
 from apps.crm.models import Contact, OemCategory
@@ -181,7 +182,7 @@ def draft_initial(company, contact: Contact, *, template: EmailTemplate | None =
         + f"\nFACTS (the only information you may use):\n{grounding}"
     )
     with agent_run(AgentName.OUTREACH, "draft.initial", company, job) as tracker:
-        result = structured_call(tracker, model=sys.ai_model_drafting, effort=sys.ai_effort_drafting, system=WRITER_SYSTEM,
+        result = structured_call(tracker, model=sys.ai_model_drafting, effort=sys.ai_effort_drafting, task="drafting", system=WRITER_SYSTEM,
                                  user_content=prompt, schema=DRAFT_SCHEMA, max_tokens=4000)
         email = _create(company=company, contact=contact, kind=EmailKind.INITIAL, template=template, subject=result["subject"],
                         body=result["body"], user=user, agent=AgentName.OUTREACH, result=result, grounding=grounding)
@@ -215,7 +216,7 @@ def draft_followup(enrollment, step, *, job=None) -> OutboundEmail:
         f"\nPREVIOUS E-MAILS:\n{history_text(company)}\n\nFACTS:\n{json.dumps(facts, ensure_ascii=False)}"
     )
     with agent_run(AgentName.FOLLOWUP, "draft.followup", company, job) as tracker:
-        result = structured_call(tracker, model=sys.ai_model_drafting, effort=sys.ai_effort_drafting, system=WRITER_SYSTEM,
+        result = structured_call(tracker, model=sys.ai_model_drafting, effort=sys.ai_effort_drafting, task="drafting", system=WRITER_SYSTEM,
                                  user_content=prompt, schema=DRAFT_SCHEMA, max_tokens=3000)
         subject = result["subject"] or (f"Re: {initial.subject}" if initial else "Following up")
         email = _create(company=company, contact=contact, kind=EmailKind.FOLLOWUP,
@@ -248,7 +249,7 @@ def draft_reply(inbound, *, job=None, user=None) -> OutboundEmail | None:
         f"\n\nFACTS:\n{json.dumps(facts, ensure_ascii=False)}"
     )
     with agent_run(AgentName.MAILBOX, "draft.reply", inbound, job) as tracker:
-        result = structured_call(tracker, model=sys.ai_model_drafting, effort=sys.ai_effort_drafting, system=WRITER_SYSTEM,
+        result = structured_call(tracker, model=sys.ai_model_drafting, effort=sys.ai_effort_drafting, task="drafting", system=WRITER_SYSTEM,
                                  user_content=prompt, schema=DRAFT_SCHEMA, max_tokens=4000)
         subject = result["subject"] or inbound.subject
         if not subject.lower().startswith("re:"):
@@ -308,6 +309,6 @@ def prepare_initial_drafts(limit: int = 20, job=None) -> dict:
             created.append({"email": email.pk, "status": email.status})
         except Exception as exc:  # noqa: BLE001 - one bad draft must not stop the batch
             errors.append(f"{company.pk}: {exc}")
-            if exc.__class__.__name__ in ("BudgetExceeded", "AIUnavailable", "AutomationHalted"):
+            if isinstance(exc, (BudgetExceeded, AIUnavailable, AIQuotaReached, AutomationHalted)):
                 break
     return {"drafted": len(created), "auto_approved": sum(1 for c in created if c["status"] == "approved"), "errors": errors[:10]}

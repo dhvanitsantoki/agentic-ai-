@@ -24,7 +24,7 @@
   <div class="col-lg-3"><div class="card h-100 kpi"><div class="card-header">AI spend this month</div><div class="card-body">
     <div class="value">${{ spend|floatformat:2 }}</div><div class="label">of ${{ sys.monthly_ai_budget_usd }} budget</div>
     <div class="progress mt-2" style="height:8px"><div class="progress-bar {% if spend >= sys.monthly_ai_budget_usd %}bg-danger{% endif %}" style="width:{% widthratio spend sys.monthly_ai_budget_usd 100 %}%"></div></div>
-    {% if not ai_configured %}<div class="small text-danger mt-2">ANTHROPIC_API_KEY not set – AI agents disabled.</div>{% endif %}
+    <ul class="list-unstyled small mt-2 mb-0">{% for row in ai_tasks %}<li><i class="bi {% if row.ok %}bi-check-circle-fill text-success{% else %}bi-x-circle-fill text-danger{% endif %}"></i> {{ row.task }}: {{ row.provider }}{% if not row.ok %} – key not set{% endif %}</li>{% endfor %}</ul>
   </div></div></div>
 </div>
 

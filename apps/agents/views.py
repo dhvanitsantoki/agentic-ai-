@@ -10,7 +10,7 @@ from apps.core.models import AutomationState, ExecutionMode, SystemSettings
 from apps.core.permissions import admin_required, manager_required, safe_next
 
 from .forms import ScheduledTaskForm
-from .llm import ai_configured, month_spend
+from .llm import ai_configured, ai_status, month_spend, task_providers
 from .models import AgentName, AgentRun, Job, ScheduledTask
 from .registry import HANDLERS, enqueue
 from .scheduler import compute_next_run
@@ -34,6 +34,7 @@ def control(request):
         "per_agent": [{**row, "label": labels.get(row["agent"], row["agent"])} for row in per_agent],
         "spend": month_spend(),
         "ai_configured": ai_configured(),
+        "ai_tasks": _ai_task_rows(sys),
         "modes": ExecutionMode.choices,
         "last_worker_activity": Job.objects.exclude(started_at=None).order_by("-started_at").values_list("started_at", flat=True).first(),
     })
@@ -145,3 +146,10 @@ def run_log(request):
     page = Paginator(qs, 50).get_page(request.GET.get("page"))
     return render(request, "agents/run_log.html", {"page_obj": page, "agents": AgentName.choices,
                                                    "statuses": AgentRun.Status.choices, "f": request.GET, "totals": totals})
+
+
+def _ai_task_rows(sys) -> list[dict]:
+    labels = {"research": "Research", "drafting": "E-mail drafting", "classification": "Reply classification & reports"}
+    status, providers = ai_status(sys), task_providers(sys)
+    return [{"task": labels[t], "provider": "OpenRouter" if providers[t] == "openrouter" else "Anthropic",
+             "ok": status[t]} for t in labels]

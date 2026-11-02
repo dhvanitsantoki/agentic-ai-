@@ -222,7 +222,7 @@ def classify(inbound: InboundEmail, job=None) -> dict:
     prompt = (f"{context}From: {inbound.from_name} <{inbound.from_email}>\nSubject: {inbound.subject}\n"
               f"Attachments: {', '.join(inbound.attachment_names) or 'none'}\n\n{inbound.body_text[:12000]}")
     with agent_run(AgentName.MAILBOX, "classify", inbound, job) as tracker:
-        result = structured_call(tracker, model=sys.ai_model_classification, effort=sys.ai_effort_classification,
+        result = structured_call(tracker, task="classification", model=sys.ai_model_classification, effort=sys.ai_effort_classification,
                                  system=CLASSIFY_SYSTEM, user_content=prompt, schema=CLASSIFY_SCHEMA, max_tokens=3000)
         tracker.run.summary = f"{inbound.from_email}: {result.get('classification')}"
     return result
@@ -258,7 +258,7 @@ def process_inbound(inbound: InboundEmail, job=None) -> InboundEmail:
         inbound.classification, inbound.classified_by = Classification.UNSUBSCRIBE, "rules"
         handle_unsubscribe(inbound)
         inbound.summary = "Asked not to receive further e-mails - added to the suppression list."
-    elif not ai_configured():
+    elif not ai_configured("classification"):
         inbound.classification, inbound.classified_by = Classification.PENDING, ""
         inbound.needs_attention = True
         inbound.summary = "AI not configured - please classify manually."

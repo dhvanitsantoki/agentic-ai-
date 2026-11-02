@@ -110,6 +110,38 @@ class DraftingAndNightlyTests(TestCase):
         self.assertIn("Delta Agro", prompt)
         self.assertIn("Manufacturer of PVC and PP ball valves", prompt, "approved company facts are the grounding")
 
+    @override_settings(OPENROUTER_API_KEY="or-test-key")
+    def test_prepare_drafts_via_openrouter(self):
+        import json as _json
+
+        sys = SystemSettings.get_solo()
+        sys.ai_provider_drafting = "openrouter"
+        sys.save()
+        body = {"id": "gen-1", "model": "vendor/free-model:free",
+                "choices": [{"finish_reason": "stop", "message": {"content": _json.dumps(INTRO)}}],
+                "usage": {"prompt_tokens": 1500, "completion_tokens": 200, "cost": 0}}
+        response = mock.Mock(status_code=200, headers={}, json=mock.Mock(return_value=body))
+        with mock.patch("apps.agents.llm.requests.post", return_value=response) as post, \
+                mock.patch("apps.agents.llm.get_client", side_effect=AssertionError("Anthropic must not be called")):
+            res = prepare_initial_drafts(limit=5)
+        self.assertEqual(res["drafted"], 1)
+        email = OutboundEmail.objects.get()
+        self.assertEqual(email.status, OutboundEmail.Status.PENDING_APPROVAL, "same approval rules for every provider")
+        self.assertIn("Sales Team", email.body_text, "signature added by code")
+        prompt = post.call_args.kwargs["json"]["messages"][1]["content"]
+        self.assertIn("Manufacturer of PVC and PP ball valves", prompt, "approved company facts are the grounding")
+        run = AgentRun.objects.get(action="draft.initial")
+        self.assertEqual(run.model, "vendor/free-model:free")
+
+    def test_prepare_drafts_stops_when_credits_run_out(self):
+        from apps.agents.llm import AICreditsExhausted
+
+        with mock.patch("apps.outreach.drafting.draft_initial", side_effect=AICreditsExhausted("no credits")) as draft, \
+                mock.patch("apps.outreach.drafting.eligible_for_intro", return_value=[self.company] * 4):
+            res = prepare_initial_drafts(limit=5)
+        self.assertEqual(draft.call_count, 1, "a provider-wide problem stops the batch")
+        self.assertEqual(res["drafted"], 0)
+
     def test_nightly_pipeline_runs_all_steps_and_logs(self):
         client = FakeClient([json_response(INTRO)])
         with mock.patch("apps.agents.llm.get_client", return_value=client):

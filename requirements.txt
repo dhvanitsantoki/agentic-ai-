@@ -10,5 +10,6 @@ psycopg[binary]>=3.2
 gunicorn>=23
 whitenoise>=6.7
 requests>=2.32
+jsonschema>=4.21
 tzdata
 qrcode>=7.4

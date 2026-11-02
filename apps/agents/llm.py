@@ -1,4 +1,4 @@
-"""Claude API wrapper used by every agent.
+"""AI wrapper used by every agent (Anthropic Claude, optionally OpenRouter for some tasks).
 
 * Meters tokens, web searches and cost on the current AgentRun.
 * Enforces the monthly AI budget before every call.
@@ -6,14 +6,21 @@
 * Runs a manual tool loop for research (server-side web_search / web_fetch + a strict
   client-side `submit_*` tool that carries the structured result), handling pause_turn.
 * Opts into server-side refusal fallbacks where the model supports them.
+* Drafting and classification can run on OpenRouter instead (System settings -> AI provider):
+  JSON-schema output, validated locally, one repair attempt, cost from OpenRouter's usage report.
+  Research always runs on Anthropic because it depends on Anthropic's server-side web tools.
 """
+import datetime as dt
 import json
 import logging
+import re
 from contextlib import contextmanager
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 import anthropic
+import requests
 from django.conf import settings
+from jsonschema import Draft202012Validator
 from django.db.models import Sum
 from django.utils import timezone
 
@@ -57,7 +64,18 @@ class AIOutputError(AIError):
 
 
 class AICreditsExhausted(AIUnavailable):
-    """The Anthropic account has no prepaid credits left (never retried)."""
+    """The provider account has no prepaid credits left (never retried)."""
+
+
+class AIQuotaReached(AIError):
+    """The provider's request quota is used up (e.g. OpenRouter's free daily limit).
+
+    The worker re-queues the job for `retry_at` without counting it as a failed attempt.
+    """
+
+    def __init__(self, message: str, retry_at: dt.datetime):
+        super().__init__(message)
+        self.retry_at = retry_at
 
 
 def _translate_api_error(exc: Exception):
@@ -89,8 +107,44 @@ def _notify_unavailable(exc: AIError):
         notify(title, body=str(exc), url="/agents/", level="danger")
 
 
-def ai_configured() -> bool:
-    return bool(settings.ANTHROPIC_API_KEY)
+ANTHROPIC, OPENROUTER = "anthropic", "openrouter"
+TASKS = ("research", "drafting", "classification")
+
+
+def task_providers(sys=None) -> dict:
+    """Which provider serves each task. Research is always Anthropic (server-side web search/fetch)."""
+    if sys is None:
+        from apps.core.models import SystemSettings
+
+        sys = SystemSettings.get_solo()
+    return {
+        "research": ANTHROPIC,
+        "drafting": sys.ai_provider_drafting or ANTHROPIC,
+        "classification": sys.ai_provider_classification or ANTHROPIC,
+    }
+
+
+def provider_key(provider: str) -> str:
+    return settings.OPENROUTER_API_KEY if provider == OPENROUTER else settings.ANTHROPIC_API_KEY
+
+
+def ai_status(sys=None) -> dict:
+    """{task: True/False} - whether the provider chosen for each task has an API key."""
+    return {task: bool(provider_key(p)) for task, p in task_providers(sys).items()}
+
+
+def ai_configured(task: str | None = None) -> bool:
+    """True if `task` can call its AI provider; without a task: if at least one task can."""
+    status = ai_status()
+    return status[task] if task else any(status.values())
+
+
+def not_configured_message(task: str) -> str:
+    provider = task_providers()[task]
+    if task == "research":
+        return "Research needs the Anthropic API (ANTHROPIC_API_KEY): it uses Anthropic's web search and fetch tools."
+    var = "OPENROUTER_API_KEY" if provider == OPENROUTER else "ANTHROPIC_API_KEY"
+    return f"AI is not configured for {task}: set {var} in .env (or choose another provider in System settings)."
 
 
 _client = None
@@ -162,6 +216,18 @@ class RunTracker:
         r.save(update_fields=["llm_calls", "input_tokens", "output_tokens", "cache_read_tokens",
                               "cache_write_tokens", "web_searches", "cost_usd", "model"])
 
+    def record_usage(self, *, model: str, input_tokens: int, output_tokens: int, cache_read: int = 0,
+                     cost: Decimal = Decimal("0")):
+        """Record a call whose cost the provider reported directly (OpenRouter)."""
+        r = self.run
+        r.llm_calls += 1
+        r.input_tokens += input_tokens
+        r.output_tokens += output_tokens
+        r.cache_read_tokens += cache_read
+        r.cost_usd += cost.quantize(Decimal("0.0001"))
+        r.model = (model or "")[:60]
+        r.save(update_fields=["llm_calls", "input_tokens", "output_tokens", "cache_read_tokens", "cost_usd", "model"])
+
     def skip(self, reason: str):
         self.skipped_reason = reason
 
@@ -211,10 +277,17 @@ def _system_blocks(system: str) -> list:
 
 
 def structured_call(tracker: RunTracker, *, model: str, effort: str, system: str, user_content, schema: dict,
-                    max_tokens: int = 16000) -> dict:
-    """Single request whose answer is JSON matching `schema` (structured outputs)."""
+                    max_tokens: int = 16000, task: str | None = None) -> dict:
+    """Single request whose answer is JSON matching `schema` (structured outputs).
+
+    `task` ("drafting"/"classification") selects the provider configured in System settings;
+    `model` is the Claude model used when that provider is Anthropic.
+    """
     ensure_not_stopped()
     check_budget()
+    if task and task_providers()[task] == OPENROUTER:
+        return openrouter_structured_call(tracker, system=system, user_content=user_content, schema=schema,
+                                          max_tokens=max_tokens)
     client = get_client()
     kwargs = _request_kwargs(model, effort)
     kwargs["output_config"]["format"] = {"type": "json_schema", "schema": schema}
@@ -314,3 +387,256 @@ def research_call(tracker: RunTracker, *, model: str, effort: str, system: str, 
                        "Include only items you verified on real pages; an empty list is acceptable.",
         })
     raise AIOutputError("Research did not finish within the allowed number of turns.")
+
+
+# --- OpenRouter -------------------------------------------------------------------
+
+OPENROUTER_TIMEOUT = (15, 300)  # connect, read (seconds)
+OPENROUTER_MIN_OUTPUT_TOKENS = 6000  # reasoning models spend output tokens on thinking
+_THINK = re.compile(r"<think>.*?</think>", re.S | re.I)
+_FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.S | re.I)
+
+
+def openrouter_models(sys=None) -> list[str]:
+    if sys is None:
+        from apps.core.models import SystemSettings
+
+        sys = SystemSettings.get_solo()
+    from apps.core.models import DEFAULT_OPENROUTER_MODELS
+
+    ids = [m.strip() for m in (sys.openrouter_models or "").split(",") if m.strip()]
+    return ids or [DEFAULT_OPENROUTER_MODELS]
+
+
+def _next_utc_midnight(now=None) -> dt.datetime:
+    now = now or timezone.now()
+    return (now + dt.timedelta(days=1)).astimezone(dt.timezone.utc).replace(hour=0, minute=5, second=0, microsecond=0)
+
+
+def _quota_reset_time(headers) -> dt.datetime:
+    """When a 429 quota resets: X-RateLimit-Reset (epoch ms or s), else Retry-After, else next UTC midnight."""
+    now = timezone.now()
+    reset = (headers or {}).get("X-RateLimit-Reset")
+    if reset:
+        try:
+            value = float(reset)
+            when = dt.datetime.fromtimestamp(value / 1000 if value > 1e11 else value, tz=dt.timezone.utc)
+            if now < when < now + dt.timedelta(days=2):
+                return when + dt.timedelta(minutes=1)
+        except (TypeError, ValueError, OverflowError, OSError):
+            pass
+    retry_after = (headers or {}).get("Retry-After")
+    if retry_after and str(retry_after).isdigit():
+        return now + dt.timedelta(seconds=min(int(retry_after), 86400))
+    return _next_utc_midnight(now)
+
+
+def _openrouter_error(status, message: str, headers=None) -> AIError:
+    text = (message or "").strip() or f"HTTP {status}"
+    low = text.lower()
+    if status == 401:
+        return AIUnavailable("The OpenRouter API key was rejected - create a new key at openrouter.ai/settings/keys.")
+    if status == 402:
+        return AICreditsExhausted(
+            "OpenRouter has no credits for the selected model(s) - use free models (openrouter/free) "
+            "or add credits at openrouter.ai/settings/credits."
+        )
+    if status == 403:
+        return AIRefused(f"OpenRouter moderation blocked this request: {text[:300]}")
+    if status == 404:
+        if "data policy" in low or "privacy" in low:
+            return AIUnavailable(
+                "No OpenRouter model is allowed by the account's privacy settings. Free models need the "
+                "free-endpoint / training option enabled at openrouter.ai/settings/privacy - or choose other models "
+                "in System settings."
+            )
+        return AIUnavailable(
+            f"OpenRouter has no available endpoint for the selected model(s): {text[:300]}. "
+            "Change 'OpenRouter models' in System settings (e.g. openrouter/free)."
+        )
+    if status == 429:
+        if re.search(r"per[- ]day|daily|free-models-per", low):
+            when = _quota_reset_time(headers)
+            return AIQuotaReached(
+                f"OpenRouter daily request limit reached - AI work continues automatically after "
+                f"{timezone.localtime(when):%d %b %H:%M}. ({text[:200]})", when,
+            )
+        return AIError("Rate limited by OpenRouter - the job will retry later.")
+    if status == 400:
+        return AIOutputError(f"Request rejected by OpenRouter: {text[:500]}")
+    return AIError(f"OpenRouter error {status}: {text[:300]}")
+
+
+def _notify_quota(exc: AIQuotaReached):
+    from apps.core.audit import notify
+    from apps.core.models import Notification
+
+    title = "AI paused: OpenRouter daily limit reached"
+    if not Notification.objects.filter(title=title, is_read=False).exists():
+        notify(title, body=str(exc), url="/agents/", level="warning")
+
+
+def _raise_openrouter(status, message, headers=None):
+    err = _openrouter_error(status, message, headers)
+    if isinstance(err, AIUnavailable):
+        _notify_unavailable(err)
+    elif isinstance(err, AIQuotaReached):
+        _notify_quota(err)
+    raise err
+
+
+def _error_message(err) -> str:
+    if isinstance(err, dict):
+        message = str(err.get("message") or "")
+        raw = (err.get("metadata") or {}).get("raw") if isinstance(err.get("metadata"), dict) else None
+        if raw and str(raw) not in message:
+            message = f"{message} ({str(raw)[:300]})" if message else str(raw)[:300]
+        return message
+    return str(err or "")
+
+
+def _openrouter_post(payload: dict) -> dict:
+    if not settings.OPENROUTER_API_KEY:
+        err = AIUnavailable("OPENROUTER_API_KEY is not set - choose Anthropic in System settings or add the key to .env.")
+        _notify_unavailable(err)
+        raise err
+    headers = {
+        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": settings.SITE_URL,
+        "X-Title": "Flotec Sales AI",
+    }
+    try:
+        resp = requests.post(f"{settings.OPENROUTER_BASE_URL}/chat/completions", json=payload, headers=headers,
+                             timeout=OPENROUTER_TIMEOUT)
+    except requests.RequestException as exc:
+        raise AIError("Could not reach OpenRouter.") from exc
+    try:
+        body = resp.json()
+    except ValueError:
+        body = None
+    if resp.status_code >= 400:
+        message = _error_message(body.get("error")) if isinstance(body, dict) else (resp.text or "")[:300]
+        _raise_openrouter(resp.status_code, message, resp.headers)
+    if not isinstance(body, dict):
+        raise AIError("OpenRouter returned an unreadable response.")
+    if body.get("error"):
+        err = body["error"]
+        code = err.get("code") if isinstance(err, dict) else None
+        _raise_openrouter(code if isinstance(code, int) else 502, _error_message(err), resp.headers)
+    return body
+
+
+def _record_openrouter_usage(tracker: RunTracker, body: dict, fallback_model: str):
+    usage = body.get("usage") or {}
+    details = usage.get("prompt_tokens_details") or {}
+    try:
+        cost = Decimal(str(usage.get("cost") or 0))
+    except (InvalidOperation, ValueError):
+        cost = Decimal("0")
+    tracker.record_usage(
+        model=body.get("model") or fallback_model,
+        input_tokens=int(usage.get("prompt_tokens") or 0),
+        output_tokens=int(usage.get("completion_tokens") or 0),
+        cache_read=int(details.get("cached_tokens") or 0),
+        cost=max(cost, Decimal("0")),
+    )
+
+
+def _message_text(body: dict) -> str:
+    choices = body.get("choices") or []
+    if not choices:
+        raise AIOutputError("OpenRouter returned no answer.")
+    choice = choices[0]
+    if choice.get("error"):
+        err = choice["error"]
+        code = err.get("code") if isinstance(err, dict) else None
+        _raise_openrouter(code if isinstance(code, int) else 502, _error_message(err))
+    message = choice.get("message") or {}
+    if message.get("refusal"):
+        raise AIRefused(f"The model declined this request: {str(message['refusal'])[:300]}")
+    finish = choice.get("finish_reason")
+    if finish == "content_filter":
+        raise AIRefused("The provider's content filter blocked the answer.")
+    content = message.get("content") or ""
+    if isinstance(content, list):
+        content = "".join(part.get("text", "") for part in content if isinstance(part, dict))
+    if finish == "length":
+        raise AIOutputError("The model ran out of output tokens before finishing.")
+    return content
+
+
+def extract_json(text: str):
+    """Parse a JSON object from a model answer (tolerates code fences and <think> blocks)."""
+    t = _THINK.sub("", text or "").strip()
+    fenced = _FENCE.search(t)
+    if fenced:
+        t = fenced.group(1).strip()
+    if not t.startswith("{"):
+        start, end = t.find("{"), t.rfind("}")
+        if start == -1 or end <= start:
+            raise ValueError("no JSON object in the answer")
+        t = t[start:end + 1]
+    return json.loads(t)
+
+
+def _prune(data, schema):
+    """Drop keys the schema does not allow (weaker models sometimes add extras)."""
+    if isinstance(data, dict) and schema.get("type") == "object":
+        props = schema.get("properties") or {}
+        if schema.get("additionalProperties") is False:
+            data = {k: v for k, v in data.items() if k in props}
+        return {k: _prune(v, props[k]) if k in props else v for k, v in data.items()}
+    if isinstance(data, list) and isinstance(schema.get("items"), dict):
+        return [_prune(v, schema["items"]) for v in data]
+    return data
+
+
+def schema_problems(data, schema) -> list[str]:
+    errors = sorted(Draft202012Validator(schema).iter_errors(data), key=lambda e: list(e.path))
+    return [f"{'/'.join(str(p) for p in e.path) or '(root)'}: {e.message}"[:300] for e in errors[:8]]
+
+
+def openrouter_structured_call(tracker: RunTracker, *, system: str, user_content, schema: dict,
+                               max_tokens: int = 16000) -> dict:
+    """JSON-schema answer from OpenRouter, validated locally, with one repair attempt."""
+    models = openrouter_models()
+    instructions = (
+        system
+        + "\n\nOUTPUT FORMAT: reply with exactly one JSON object and nothing else (no prose, no code fences). "
+        + "It must match this JSON Schema:\n" + json.dumps(schema, ensure_ascii=False)
+    )
+    messages = [{"role": "system", "content": instructions}, {"role": "user", "content": user_content}]
+    payload = {
+        "messages": messages,
+        "max_tokens": max(max_tokens, OPENROUTER_MIN_OUTPUT_TOKENS),
+        "response_format": {"type": "json_schema", "json_schema": {"name": "result", "strict": True, "schema": schema}},
+        "provider": {"require_parameters": True},
+    }
+    if len(models) == 1:
+        payload["model"] = models[0]
+    else:
+        payload["models"] = models
+    problem = ""
+    for attempt in range(2):
+        if attempt:
+            ensure_not_stopped()
+            check_budget()
+        body = _openrouter_post(payload)
+        _record_openrouter_usage(tracker, body, models[0])
+        text = _message_text(body)
+        try:
+            data = _prune(extract_json(text), schema)
+        except ValueError as exc:  # json.JSONDecodeError is a ValueError
+            problem = f"not valid JSON ({exc})"
+        else:
+            problems = schema_problems(data, schema)
+            if not problems:
+                return data
+            problem = "; ".join(problems)
+        payload["messages"] = messages + [
+            {"role": "assistant", "content": text[:20000]},
+            {"role": "user", "content": f"That answer was rejected: {problem}. Reply again with only the corrected "
+                                        "JSON object matching the schema."},
+        ]
+    raise AIOutputError(f"The model did not return JSON matching the schema: {problem[:500]}")

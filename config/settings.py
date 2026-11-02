@@ -215,6 +215,10 @@ DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "noreply@localhost")
 
 # --- AI ------------------------------------------------------------------------
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", "")
+# Optional second provider for drafting / reply classification / report summaries
+# (buyer research always uses Anthropic: it needs Anthropic's web search and fetch tools).
+OPENROUTER_API_KEY = env("OPENROUTER_API_KEY", "")
+OPENROUTER_BASE_URL = env("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
 
 # --- OAuth apps for mailbox connections -------------------------------------------
 GOOGLE_OAUTH_CLIENT_ID = env("GOOGLE_OAUTH_CLIENT_ID", "")

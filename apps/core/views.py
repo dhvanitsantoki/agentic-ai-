@@ -85,6 +85,8 @@ def settings_home(request):
         "profile_missing": profile.missing_for_outreach(),
         "mail_accounts": MailAccount.objects.all(),
         "ai_configured": bool(settings.ANTHROPIC_API_KEY),
+        "openrouter_configured": bool(settings.OPENROUTER_API_KEY),
+        "uses_openrouter": "openrouter" in (sys.ai_provider_drafting, sys.ai_provider_classification),
         "oauth": {
             "gmail": bool(settings.GOOGLE_OAUTH_CLIENT_ID and settings.GOOGLE_OAUTH_CLIENT_SECRET),
             "outlook": bool(settings.MS_OAUTH_CLIENT_ID and settings.MS_OAUTH_CLIENT_SECRET),

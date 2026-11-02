@@ -61,7 +61,8 @@ class SystemSettingsForm(BootstrapFormMixin, forms.ModelForm):
             "min_days_between_initial_emails", "unsubscribe_footer",
             "research_daily_company_limit", "research_companies_per_run", "research_max_web_searches",
             "ai_model_research", "ai_effort_research", "ai_model_drafting", "ai_effort_drafting",
-            "ai_model_classification", "ai_effort_classification", "monthly_ai_budget_usd",
+            "ai_model_classification", "ai_effort_classification",
+            "ai_provider_drafting", "ai_provider_classification", "openrouter_models", "monthly_ai_budget_usd",
             "require_two_factor", "escalation_emails", "report_recipients",
         ]
         widgets = {"unsubscribe_footer": forms.Textarea(attrs={"rows": 2})}
@@ -72,6 +73,13 @@ class SystemSettingsForm(BootstrapFormMixin, forms.ModelForm):
         if start is not None and end is not None:
             if not (0 <= start < end <= 24):
                 self.add_error("send_window_end_hour", "Window must satisfy 0 ≤ start < end ≤ 24.")
+        models_text = data.get("openrouter_models") or ""
+        ids = [m.strip() for m in models_text.split(",") if m.strip()]
+        if any(p == "openrouter" for p in (data.get("ai_provider_drafting"), data.get("ai_provider_classification"))) and not ids:
+            self.add_error("openrouter_models", "Enter at least one OpenRouter model ID (e.g. openrouter/free).")
+        if any(" " in m or "/" not in m for m in ids):
+            self.add_error("openrouter_models", "Model IDs look like 'provider/model', separated by commas.")
+        data["openrouter_models"] = ", ".join(ids)
         footer = data.get("unsubscribe_footer") or ""
         if "{unsubscribe_url}" not in footer:
             self.add_error("unsubscribe_footer", "The footer must contain {unsubscribe_url}.")

@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
@@ -9,6 +8,7 @@ from .permissions import is_manager, role_of
 def app_context(request):
     if not getattr(request, "user", None) or not request.user.is_authenticated:
         return {}
+    from apps.agents.llm import ai_status
     from apps.agents.models import AgentRun
     from apps.crm.models import Task
     from apps.mailbox.models import InboundEmail
@@ -39,7 +39,7 @@ def app_context(request):
         "app_settings": sys,
         "today": timezone.localdate(),
         "now": timezone.now(),
-        "ai_configured": bool(settings.ANTHROPIC_API_KEY),
+        "ai_configured": any(ai_status(sys).values()),
         "nav_counts": counts,
         "user_role": role,
         "user_role_label": Role(role).label if role else "",

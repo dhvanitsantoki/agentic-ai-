@@ -38,8 +38,8 @@ def discover(sys: SystemSettings) -> dict:
     from apps.research.models import ResearchRun
     from apps.research.pipeline import companies_added_today, execute_run
 
-    if not ai_configured():
-        return {"skipped": "AI not configured"}
+    if not ai_configured("research"):
+        return {"skipped": "AI not configured for research (needs ANTHROPIC_API_KEY)"}
     remaining = sys.research_daily_company_limit - companies_added_today()
     if remaining <= 0:
         return {"skipped": "daily research limit reached"}
@@ -70,8 +70,8 @@ def prepare_drafts(sys: SystemSettings) -> dict:
 
     if sys.execution_mode == ExecutionMode.RESEARCH_ONLY:
         return {"skipped": "Mode 1 (research only)"}
-    if not ai_configured():
-        return {"skipped": "AI not configured"}
+    if not ai_configured("drafting"):
+        return {"skipped": "AI not configured for drafting"}
     return prepare_initial_drafts(limit=sys.daily_send_limit)
 
 

@@ -7,7 +7,8 @@
   <div class="col-lg-6">
     <div class="card h-100"><div class="card-header">Setup checklist</div>
     <ul class="list-group list-group-flush">
-      <li class="list-group-item d-flex justify-content-between"><span><i class="bi {% if ai_configured %}bi-check-circle-fill text-success{% else %}bi-x-circle-fill text-danger{% endif %}"></i> Anthropic API key (<code>ANTHROPIC_API_KEY</code>)</span><span class="text-muted small">{% if ai_configured %}configured{% else %}set in .env and restart{% endif %}</span></li>
+      <li class="list-group-item d-flex justify-content-between"><span><i class="bi {% if ai_configured %}bi-check-circle-fill text-success{% else %}bi-x-circle-fill text-danger{% endif %}"></i> Anthropic API key (<code>ANTHROPIC_API_KEY</code>)</span><span class="text-muted small">{% if ai_configured %}configured{% else %}set in .env and restart{% endif %} · needed for research</span></li>
+      <li class="list-group-item d-flex justify-content-between"><span><i class="bi {% if openrouter_configured %}bi-check-circle-fill text-success{% elif uses_openrouter %}bi-x-circle-fill text-danger{% else %}bi-dash-circle text-muted{% endif %}"></i> OpenRouter API key (<code>OPENROUTER_API_KEY</code>)</span><span class="text-muted small">{% if openrouter_configured %}configured{% else %}optional{% endif %} · {% if uses_openrouter %}in use for {% if sys.ai_provider_drafting == "openrouter" %}drafting {% endif %}{% if sys.ai_provider_classification == "openrouter" %}classification{% endif %}{% else %}not in use{% endif %}</span></li>
       <li class="list-group-item d-flex justify-content-between"><span><i class="bi {% if encryption_key_set %}bi-check-circle-fill text-success{% else %}bi-exclamation-circle-fill text-warning{% endif %}"></i> Token encryption key (<code>FIELD_ENCRYPTION_KEY</code>)</span><span class="text-muted small">{% if encryption_key_set %}configured{% else %}development fallback in use{% endif %}</span></li>
       <li class="list-group-item d-flex justify-content-between"><span><i class="bi {% if not profile_missing %}bi-check-circle-fill text-success{% else %}bi-exclamation-circle-fill text-warning{% endif %}"></i> Company profile</span><span class="text-muted small">{% if profile_missing %}missing: {{ profile_missing|join:", " }}{% else %}complete{% endif %}</span></li>
       <li class="list-group-item d-flex justify-content-between"><span><i class="bi {% if mail_accounts %}bi-check-circle-fill text-success{% else %}bi-x-circle-fill text-danger{% endif %}"></i> Connected mailbox</span><span class="text-muted small">{{ mail_accounts|length }} connected</span></li>
@@ -24,6 +25,7 @@
         <dt class="col-6">Limits per mailbox</dt><dd class="col-6">{{ sys.daily_send_limit }}/day, {{ sys.hourly_send_limit }}/hour</dd>
         <dt class="col-6">Recipient sending window</dt><dd class="col-6">{{ sys.send_window_start_hour }}:00–{{ sys.send_window_end_hour }}:00 {% if sys.skip_weekends %}weekdays{% endif %}</dd>
         <dt class="col-6">Research limit</dt><dd class="col-6">{{ sys.research_daily_company_limit }} companies/day</dd>
+        <dt class="col-6">AI providers</dt><dd class="col-6">research: Anthropic · drafting: {% if sys.ai_provider_drafting == "openrouter" %}OpenRouter{% else %}Anthropic{% endif %} · classification: {% if sys.ai_provider_classification == "openrouter" %}OpenRouter{% else %}Anthropic{% endif %}</dd>
         <dt class="col-6">AI budget</dt><dd class="col-6">US$ {{ sys.monthly_ai_budget_usd }} / month</dd>
       </dl>
     </div></div>
