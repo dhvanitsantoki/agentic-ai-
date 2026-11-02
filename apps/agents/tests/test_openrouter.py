@@ -267,3 +267,40 @@ class QuotaWorkerTests(TestCase):
         self.assertEqual(job.status, Job.Status.QUEUED, "a quota wait is not a failure")
         self.assertEqual(job.run_after, retry_at)
         self.assertEqual(job.attempts, 2)
+
+
+@override_settings(OPENROUTER_API_KEY="or-test-key", ANTHROPIC_API_KEY="")
+class SelfTestCommandTests(TestCase):
+    def run_command(self, *args, post=None, get=None):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        with mock.patch("apps.agents.llm.requests.post", side_effect=post or []), \
+                mock.patch("apps.agents.management.commands.ai_selftest.requests.get", side_effect=get or []):
+            call_command("ai_selftest", *args, stdout=out)
+        return out.getvalue()
+
+    def test_openrouter_selftest_passes_and_shows_key_limits(self):
+        answer = {"classification": "need_catalogue", "wants_catalogue": True, "summary": "Asks for the catalogue."}
+        key = FakeResponse(200, {"data": {"label": "sk-or-v1-abc...", "is_free_tier": True, "limit": None, "usage": 0}})
+        out = self.run_command("--provider", "openrouter", post=[completion(json.dumps(answer))], get=[key])
+        self.assertIn("PASS", out)
+        self.assertIn('"is_free_tier": true', out)
+        self.assertNotIn("or-test-key", out, "the key itself is never printed")
+        self.assertTrue(AgentRun.objects.filter(agent="system", action="ai.selftest", status="succeeded").exists())
+
+    def test_failure_is_reported_as_command_error(self):
+        from django.core.management.base import CommandError
+
+        with self.assertRaises(CommandError) as ctx:
+            self.run_command("--provider", "openrouter", post=[error(401, "No auth credentials found")],
+                             get=[FakeResponse(401, {"error": {"message": "No auth credentials found"}})])
+        self.assertIn("AIUnavailable", str(ctx.exception))
+
+    def test_missing_key(self):
+        from django.core.management.base import CommandError
+
+        with self.assertRaises(CommandError):
+            self.run_command("--provider", "anthropic")

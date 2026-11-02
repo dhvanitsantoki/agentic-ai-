@@ -101,6 +101,19 @@ Products page. Other website claims (lead-free / food-grade, export countries) a
 categories, the 10 e-mail template types, the Day 0/3/7/14/30 follow-up sequence and the
 scheduled tasks. It is safe to run again.
 
+Check the AI key(s) with one live request (a synthetic test e-mail; free on `openrouter/free`):
+
+```bash
+sudo -u flotec .venv/bin/python manage.py ai_selftest --provider openrouter
+```
+
+```bash
+sudo -u flotec .venv/bin/python manage.py ai_selftest --provider anthropic --model claude-haiku-5-5
+```
+
+`PASS` means the key, model and structured output work. A `FAILED` line names the problem
+(rejected key, no credits, privacy settings, daily limit, network).
+
 ## 6. Services
 
 ```bash
