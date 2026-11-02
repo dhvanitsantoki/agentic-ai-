@@ -1,6 +1,6 @@
 # Phase reports
 
-Test totals: **178 automated tests, all passing on SQLite and on PostgreSQL 16**
+Test totals: **179 automated tests, all passing on SQLite and on PostgreSQL 16**
 (`python manage.py test`). AI and mailbox providers are tested with fakes/mocked HTTP; nothing in
 the test suite calls a real external service.
 
@@ -128,6 +128,10 @@ mobile layout); background worker executed the scheduled jobs, the nightly pipel
   development container cannot reach openrouter.ai, so the first live call happens on the server.
 * **`manage.py ai_selftest`** – one live request with a synthetic test e-mail per provider: shows the
   answering model, tokens, cost, the OpenRouter key's limits (never the key) and PASS/FAILED.
+* **Fix:** the website importer copied food-safe / potable-water / lead-free statements into product
+  texts (found while preparing screenshots). They are now held back sentence by sentence and listed for
+  the owner; `--confirm-material-safety` adds them once confirmed, and changed texts reset verification.
+* **Fix:** multiple-choice checkbox fields showed their label below the options (research form).
 * **Fix:** the nightly draft batch did not stop when the Anthropic account ran out of credits (it tried
   every company); it now stops on any provider-wide problem (credits, key, quota, budget, stop).
 * **Live API check** with the owner's key: authentication and access to Opus 5.5 / Sonnet 5.5 /

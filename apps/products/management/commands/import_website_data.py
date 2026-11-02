@@ -10,6 +10,9 @@ Safety rules applied:
 * products and sizes are imported as NOT verified - a manager verifies them before the AI uses them;
 * certifications, export-market claims and material-safety claims are NOT copied into the approved
   facts - they are printed so the owner can confirm them first;
+* material-safety statements in product texts (food-safe, potable / drinking water, lead-free, non-toxic)
+  are held back sentence by sentence unless the owner confirms them (--confirm-material-safety);
+* a re-import that changes a verified product's text resets its verification;
 * no prices, MOQs or packaging are invented (the website has none);
 * the catalogue is uploaded but not approved for sending until a manager ticks it.
 """
@@ -56,6 +59,28 @@ def material_code(text: str) -> str:
     return Material.OTHER
 
 
+# Statements the owner must confirm before buyers may be told (product suitability for drinking water etc.).
+MATERIAL_SAFETY_CLAIM = re.compile(
+    r"\bfood\b|potable|drinking[- ]water|lead[- ]?free|non[- ]?toxic|\bNSF\b|\bWRAS\b", re.I)
+
+
+def split_claims(text: str, confirmed: bool) -> tuple[str, list[str]]:
+    """Return (text without unconfirmed material-safety sentences, held-back sentences)."""
+    if confirmed or not text:
+        return text or "", []
+    kept, held = [], []
+    for sentence in re.split(r"(?<=[.!?])\s+", text.strip()):
+        (held if MATERIAL_SAFETY_CLAIM.search(sentence) else kept).append(sentence)
+    return " ".join(kept), held
+
+
+def filter_items(items, confirmed: bool) -> tuple[list[str], list[str]]:
+    items = [i for i in items or [] if i]
+    if confirmed:
+        return items, []
+    return [i for i in items if not MATERIAL_SAFETY_CLAIM.search(i)], [i for i in items if MATERIAL_SAFETY_CLAIM.search(i)]
+
+
 def size_mm(size: str):
     m = re.match(r"^\s*(\d+(?:\.\d+)?)\s*mm\b", size or "")
     return m.group(1) if m and "×" not in size and "x" not in size.lower().split("mm")[0] else None
@@ -96,11 +121,15 @@ class Command(BaseCommand):
                             help="An extra fact the OWNER has confirmed (repeatable), added to the approved facts.")
         parser.add_argument("--confirm-exports", action="store_true",
                             help="The owner confirms the website's export statements are true (otherwise they are skipped).")
+        parser.add_argument("--confirm-material-safety", action="store_true",
+                            help="The owner confirms the website's food-safe / potable-water / lead-free statements are true "
+                                 "(otherwise those sentences are left out of the product texts).")
         parser.add_argument("--certification", action="append", default=[], metavar="NAME",
                             help="A certification the OWNER has confirmed the company holds (repeatable), "
                                  "e.g. --certification \"ISO 9001:2015\". Never taken from the website automatically.")
 
-    def handle(self, website_dir, overwrite_profile=False, certification=(), fact=(), confirm_exports=False, **opts):
+    def handle(self, website_dir, overwrite_profile=False, certification=(), fact=(), confirm_exports=False,
+               confirm_material_safety=False, **opts):
         root = Path(website_dir).resolve()
         data = read_website(root)
         seed_categories()
@@ -108,14 +137,21 @@ class Command(BaseCommand):
             self._profile(data, overwrite_profile, confirm_exports)
             self._certifications(certification)
             self._facts(fact)
-            counts = self._products(data, root)
+            counts = self._products(data, root, confirm_material_safety)
             doc = self._catalogue(root)
         self.stdout.write(self.style.SUCCESS(
             f"Imported {counts['products_new']} new / {counts['products_updated']} updated products, "
             f"{counts['sizes']} sizes, {counts['images']} photos{', catalogue uploaded' if doc else ''}."))
-        self.stdout.write("All products are NOT verified yet: a manager must review and verify them (Products page).")
-        self.stdout.write("Not imported unless confirmed by the owner: certifications (use --certification), lead-free / "
-                          "potable-water / food-grade claims, export history and export country list (use --confirm-exports), revenue target.")
+        if counts["reset"]:
+            self.stdout.write(self.style.WARNING(f"{counts['reset']} verified product(s) changed and need verifying again."))
+        self.stdout.write("Products are NOT verified until a manager reviews them (Products page).")
+        if counts["held"]:
+            examples = "; ".join(sorted(set(counts["held"]))[:5])
+            self.stdout.write(self.style.WARNING(
+                f"Held back {len(counts['held'])} food-safe / potable-water / lead-free statement(s) from product texts until the owner "
+                f"confirms them (then re-run with --confirm-material-safety). Examples: {examples}"))
+        self.stdout.write("Not imported unless confirmed by the owner: certifications (use --certification), export history and "
+                          "export country list (use --confirm-exports), revenue target.")
 
     def _profile(self, data, overwrite, confirm_exports=False):
         c = data["company"]
@@ -192,23 +228,33 @@ class Command(BaseCommand):
                 return ProductCategory.objects.get(name=name)
         return ProductCategory.objects.get(name="Other Plastic Irrigation Products")
 
-    def _products(self, data, root):
-        counts = {"products_new": 0, "products_updated": 0, "sizes": 0, "images": 0}
+    def _products(self, data, root, confirm_material_safety=False):
+        counts = {"products_new": 0, "products_updated": 0, "sizes": 0, "images": 0, "held": [], "reset": 0}
         for wp in data["products"]:
             category = self._category_for(wp)
             material = material_code(wp.get("material", ""))
-            features = "\n".join(wp.get("features", []))
+            features, held_f = filter_items(wp.get("features"), confirm_material_safety)
+            applications, held_a = filter_items(wp.get("applications"), confirm_material_safety)
+            description, held_d = split_claims(wp.get("description") or "", confirm_material_safety)
+            if not description:
+                description, held_s = split_claims(wp.get("shortDescription") or "", confirm_material_safety)
+                held_d += held_s
+            counts["held"] += held_f + held_a + held_d
             fields = {
-                "description": wp.get("description") or wp.get("shortDescription", ""),
-                "applications": "; ".join(wp.get("applications", [])),
-                "technical_specifications": f"Material: {wp.get('material', '')}\n{features}".strip(),
+                "description": description,
+                "applications": "; ".join(applications),
+                "technical_specifications": (f"Material: {wp.get('material', '')}\n" + "\n".join(features)).strip(),
                 "available_sizes": (wp.get("sizeRange") or ", ".join(wp.get("sizes", [])))[:255],
                 "pressure_rating": (wp.get("pressureRating") or "")[:120],
             }
             product, created = Product.objects.get_or_create(category=category, name=wp["name"][:200], material=material, defaults=fields)
             if not created:
+                changed = any(getattr(product, k) != v for k, v in fields.items())
                 for k, v in fields.items():
                     setattr(product, k, v)
+                if changed and product.is_verified:
+                    product.is_verified, product.verified_by, product.verified_at = False, None, None
+                    counts["reset"] += 1
                 product.save()
             counts["products_new" if created else "products_updated"] += 1
             for size in wp.get("sizes", []):

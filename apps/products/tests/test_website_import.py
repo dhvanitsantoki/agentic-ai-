@@ -28,9 +28,10 @@ export type Product = {
 export const products: Product[] = [
   {
     slug: "rpvc-double-union-ball-valve", name: "RPVC Double Union Ball Valve", category: "ball-valves",
-    image: "/images/du.jpg", shortDescription: "s", description: "Main-line valve.", sizeRange: "32mm – 63mm",
-    sizes: ["32mm", "63mm"], material: "RPVC (Rigid PVC), TPE seals", pressureRating: "16 bar", features: ["Quarter-turn"],
-    applications: ["Drip main lines"],
+    image: "/images/du.jpg", shortDescription: "s", description: "Main-line valve. Food-safe body for potable water.", sizeRange: "32mm – 63mm",
+    sizes: ["32mm", "63mm"], material: "RPVC (Rigid PVC), TPE seals", pressureRating: "16 bar",
+    features: ["Quarter-turn", "Lead-free material", "Union nut load does not reach the ball"],
+    applications: ["Drip main lines", "Potable water lines"],
   },
   {
     slug: "black-tee", name: "Black Tee", category: "fittings-accessories", image: "/images/missing.jpg", shortDescription: "s",
@@ -121,3 +122,23 @@ class WebsiteImportTests(TestCase):
         self.client.force_login(make_user("mgr", Role.MANAGER))
         self.client.post("/products/verify-all/", {"verified": "0", "material": "PP"})
         self.assertEqual(list(Product.objects.filter(is_verified=True).values_list("name", flat=True)), ["Black Tee"])
+
+    def test_material_safety_claims_held_back_until_owner_confirms(self):
+        out = StringIO()
+        call_command("import_website_data", str(self.tmp), stdout=out)
+        du = Product.objects.get(name="RPVC Double Union Ball Valve")
+        self.assertEqual(du.description, "Main-line valve.")
+        self.assertEqual(du.applications, "Drip main lines")
+        self.assertNotIn("Lead-free", du.technical_specifications)
+        self.assertIn("Union nut load does not reach the ball", du.technical_specifications, "'load' is not 'lead-free'")
+        self.assertIn("Held back 3", out.getvalue())
+        manager = make_user("mgr", Role.MANAGER)
+        du.mark_verified(manager)
+        out = StringIO()
+        call_command("import_website_data", str(self.tmp), "--confirm-material-safety", stdout=out)
+        du.refresh_from_db()
+        self.assertIn("Food-safe body for potable water.", du.description)
+        self.assertIn("Potable water lines", du.applications)
+        self.assertIn("Lead-free material", du.technical_specifications)
+        self.assertFalse(du.is_verified, "changed text must be verified again")
+        self.assertIn("need verifying again", out.getvalue())

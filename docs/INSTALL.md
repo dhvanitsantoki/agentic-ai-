@@ -95,7 +95,9 @@ is starting export sales, so the website's export statements are skipped (add `-
 once they become true).
 
 Products are imported as *not verified*; a manager reviews them and clicks **Verify all shown** on the
-Products page. Other website claims (lead-free / food-grade, export countries) are not copied until confirmed.
+Products page. Other website claims are not copied until confirmed: export countries (`--confirm-exports`)
+and the food-safe / potable-water / lead-free sentences in product texts (`--confirm-material-safety`,
+only once the owner confirms them - re-importing changed texts resets verification).
 
 `setup_initial_data` creates the ISO country list (by continent, with time zones), the product
 categories, the 10 e-mail template types, the Day 0/3/7/14/30 follow-up sequence and the

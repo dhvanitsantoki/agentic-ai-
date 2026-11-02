@@ -34,3 +34,7 @@ body { background: #f4f6f9; font-size: .925rem; }
   .app-main { margin-left: 0; }
 }
 .qr svg { width: 100%; height: auto; display: block; }
+
+/* Multiple-choice checkboxes: label above, options in a wrapping row */
+.checkbox-group > div { display: flex; flex-wrap: wrap; gap: .35rem 1.5rem; }
+.checkbox-group label { display: inline-flex; align-items: center; gap: .4rem; font-weight: normal; }
