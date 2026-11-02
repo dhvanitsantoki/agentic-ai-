@@ -86,10 +86,12 @@ sudo -u flotec git clone https://github.com/dhvanitsantoki/flotec-website- /srv/
 ```
 
 ```bash
-sudo -u flotec .venv/bin/python manage.py import_website_data /srv/flotec/website --certification "ISO 9001:2015"
+sudo -u flotec .venv/bin/python manage.py import_website_data /srv/flotec/website --certification "ISO 9001:2015" --fact "Established Indian manufacturer now expanding into export markets"
 ```
 
-(`--certification` lists only certifications the owner has confirmed: ISO 9001:2015 was confirmed on 2 Nov 2026.)
+Owner confirmations recorded on 2 Nov 2026: ISO 9001:2015 is held; the company does **not export yet** and
+is starting export sales, so the website's export statements are skipped (add `--confirm-exports` only
+once they become true).
 
 Products are imported as *not verified*; a manager reviews them and clicks **Verify all shown** on the
 Products page. Other website claims (lead-free / food-grade, export countries) are not copied until confirmed.

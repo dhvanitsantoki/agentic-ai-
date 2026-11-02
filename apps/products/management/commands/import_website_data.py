@@ -92,17 +92,22 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("website_dir")
         parser.add_argument("--overwrite-profile", action="store_true", help="Replace company profile fields that are already filled.")
+        parser.add_argument("--fact", action="append", default=[], metavar="TEXT",
+                            help="An extra fact the OWNER has confirmed (repeatable), added to the approved facts.")
+        parser.add_argument("--confirm-exports", action="store_true",
+                            help="The owner confirms the website's export statements are true (otherwise they are skipped).")
         parser.add_argument("--certification", action="append", default=[], metavar="NAME",
                             help="A certification the OWNER has confirmed the company holds (repeatable), "
                                  "e.g. --certification \"ISO 9001:2015\". Never taken from the website automatically.")
 
-    def handle(self, website_dir, overwrite_profile=False, certification=(), **opts):
+    def handle(self, website_dir, overwrite_profile=False, certification=(), fact=(), confirm_exports=False, **opts):
         root = Path(website_dir).resolve()
         data = read_website(root)
         seed_categories()
         with transaction.atomic():
-            self._profile(data, overwrite_profile)
+            self._profile(data, overwrite_profile, confirm_exports)
             self._certifications(certification)
+            self._facts(fact)
             counts = self._products(data, root)
             doc = self._catalogue(root)
         self.stdout.write(self.style.SUCCESS(
@@ -110,9 +115,9 @@ class Command(BaseCommand):
             f"{counts['sizes']} sizes, {counts['images']} photos{', catalogue uploaded' if doc else ''}."))
         self.stdout.write("All products are NOT verified yet: a manager must review and verify them (Products page).")
         self.stdout.write("Not imported unless confirmed by the owner: certifications (use --certification), lead-free / "
-                          "potable-water / food-grade claims, export country list, revenue target.")
+                          "potable-water / food-grade claims, export history and export country list (use --confirm-exports), revenue target.")
 
-    def _profile(self, data, overwrite):
+    def _profile(self, data, overwrite, confirm_exports=False):
         c = data["company"]
         p = CompanyProfile.get_solo()
         stats = {s["label"]: s for s in data.get("stats", [])}
@@ -120,8 +125,9 @@ class Command(BaseCommand):
         size_stat = stats.get("Size Range Engineered", {})
         size_range = f"{size_stat.get('value')}{size_stat.get('suffix', '')}" if size_stat else ""
         # Company history from the website timeline (targets / revenue goals are not facts and are skipped).
+        skip = r"vision|target|₹|crore" + ("" if confirm_exports else r"|export")
         history = [f"{t['year']}: {t['description']}" for t in data.get("timeline", [])
-                   if t.get("description") and not re.search(r"vision|target|₹|crore", f"{t.get('title', '')} {t['description']}", re.I)]
+                   if t.get("description") and not re.search(skip, f"{t.get('title', '')} {t['description']}", re.I)]
         values = {
             "legal_name": c.get("legalName", ""), "brand_name": c.get("brand", ""),
             "address": "\n".join(x for x in [c["address"].get("line1", ""), c["address"].get("line2", "")] if x),
@@ -169,6 +175,16 @@ class Command(BaseCommand):
             p.certifications = "\n".join(held + added)
             p.save(update_fields=["certifications", "updated_at"])
         self.stdout.write(f"Owner-confirmed certifications: {', '.join(held + added)}")
+
+    def _facts(self, facts):
+        facts = [f.strip() for f in facts or [] if f and f.strip()]
+        if not facts:
+            return
+        p = CompanyProfile.get_solo()
+        current = p.approved_fact_list
+        p.approved_facts = "\n".join(current + [f for f in facts if f not in current])
+        p.save(update_fields=["approved_facts", "updated_at"])
+        self.stdout.write(f"Owner-confirmed facts added: {len(facts)}")
 
     def _category_for(self, product):
         for rule, name in CATEGORY_RULES:

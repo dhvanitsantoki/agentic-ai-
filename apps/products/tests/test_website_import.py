@@ -53,6 +53,7 @@ export const stats = [{ value: 40, suffix: "+", label: "Product Variants" }];
 
 export const timeline = [
   { year: "2001", title: "Foundation", description: "Company established." },
+  { year: "2023", title: "Export Growth", description: "Scaled export enquiries across new geographies." },
   { year: "2030", title: "Revenue Vision", description: "Target of 100 crore." },
 ];
 '''
@@ -104,6 +105,14 @@ class WebsiteImportTests(TestCase):
         call_command("import_website_data", str(self.tmp), "--certification", "ISO 9001:2015", stdout=StringIO())
         call_command("import_website_data", str(self.tmp), "--certification", "ISO 9001:2015", stdout=StringIO())
         self.assertEqual(CompanyProfile.get_solo().certification_list, ["ISO 9001:2015"])
+
+    def test_export_claims_need_confirmation_and_owner_facts(self):
+        call_command("import_website_data", str(self.tmp), "--fact", "Now expanding into export markets", stdout=StringIO())
+        p = CompanyProfile.get_solo()
+        self.assertNotIn("export enquiries", p.approved_facts)
+        self.assertIn("Now expanding into export markets", p.approved_fact_list)
+        call_command("import_website_data", str(self.tmp), "--overwrite-profile", "--confirm-exports", stdout=StringIO())
+        self.assertIn("2023: Scaled export enquiries", CompanyProfile.get_solo().approved_facts)
 
     def test_bulk_verify_by_manager_only(self):
         call_command("import_website_data", str(self.tmp), stdout=StringIO())
