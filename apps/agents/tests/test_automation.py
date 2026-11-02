@@ -159,3 +159,33 @@ class ControlViewTests(TestCase):
         self.client.force_login(ex)
         self.assertEqual(self.client.post("/agents/state/", {"state": "running"}).status_code, 403)
         self.assertEqual(self.client.post("/agents/mode/", {"mode": "3"}).status_code, 403)
+
+
+class ApiErrorMappingTests(TestCase):
+    def test_no_credits_is_permanent_and_notifies(self):
+        import anthropic
+        import httpx2
+        from django.test import override_settings
+
+        from apps.agents.llm import AICreditsExhausted, RunTracker, structured_call
+        from apps.agents.models import AgentRun
+
+        req = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+        resp = httpx2.Response(400, request=req, json={"type": "error", "error": {"type": "invalid_request_error",
+                               "message": "Your credit balance is too low to access the Anthropic API."}})
+        err = anthropic.BadRequestError("Your credit balance is too low to access the Anthropic API.", response=resp,
+                                        body=resp.json())
+
+        class Boom:
+            class beta:
+                class messages:
+                    @staticmethod
+                    def create(**kw):
+                        raise err
+
+        tracker = RunTracker(AgentRun.objects.create(agent="outreach", action="t"))
+        with override_settings(ANTHROPIC_API_KEY="k"), mock.patch("apps.agents.llm.get_client", return_value=Boom), \
+                self.assertRaises(AICreditsExhausted) as ctx:
+            structured_call(tracker, model="claude-opus-5-5", effort="low", system="s", user_content="u", schema={"type": "object"})
+        self.assertTrue(ctx.exception.permanent, "worker must not retry")
+        self.assertTrue(Notification.objects.filter(title__startswith="AI agents stopped").exists())

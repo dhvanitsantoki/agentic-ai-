@@ -56,6 +56,39 @@ class AIOutputError(AIError):
     pass
 
 
+class AICreditsExhausted(AIUnavailable):
+    """The Anthropic account has no prepaid credits left (never retried)."""
+
+
+def _translate_api_error(exc: Exception):
+    """Map SDK exceptions to agent errors; permanent problems are not retried by the worker."""
+    if isinstance(exc, anthropic.AuthenticationError):
+        return AIUnavailable("The Anthropic API key was rejected.")
+    if isinstance(exc, anthropic.PermissionDeniedError):
+        return AIUnavailable(f"The API key lacks permission for this request: {exc.message}")
+    if isinstance(exc, anthropic.BadRequestError):
+        message = str(getattr(exc, "message", exc))
+        if "credit balance" in message.lower():
+            return AICreditsExhausted("Anthropic account has no credits left - add credits at console.anthropic.com > Plans & Billing.")
+        return AIOutputError(f"Request rejected by the API: {message}")
+    if isinstance(exc, anthropic.RateLimitError):
+        return AIError("Rate limited by the API - the job will retry later.")
+    if isinstance(exc, anthropic.APIStatusError):
+        return AIError(f"API error {exc.status_code}")
+    if isinstance(exc, anthropic.APIConnectionError):
+        return AIError("Could not reach the Anthropic API.")
+    return exc
+
+
+def _notify_unavailable(exc: AIError):
+    from apps.core.audit import notify
+    from apps.core.models import Notification
+
+    title = "AI agents stopped: " + str(exc)[:150]
+    if not Notification.objects.filter(title=title, is_read=False).exists():
+        notify(title, body=str(exc), url="/agents/", level="danger")
+
+
 def ai_configured() -> bool:
     return bool(settings.ANTHROPIC_API_KEY)
 
@@ -192,16 +225,11 @@ def structured_call(tracker: RunTracker, *, model: str, effort: str, system: str
             messages=[{"role": "user", "content": user_content}],
             **kwargs,
         )
-    except anthropic.BadRequestError as exc:
-        raise AIOutputError(f"Request rejected by the API: {exc}") from exc
-    except anthropic.AuthenticationError as exc:
-        raise AIUnavailable("The Anthropic API key was rejected.") from exc
-    except anthropic.RateLimitError as exc:
-        raise AIError("Rate limited by the API - the job will retry later.") from exc
-    except anthropic.APIStatusError as exc:
-        raise AIError(f"API error {exc.status_code}") from exc
-    except anthropic.APIConnectionError as exc:
-        raise AIError("Could not reach the Anthropic API.") from exc
+    except anthropic.APIError as exc:
+        err = _translate_api_error(exc)
+        if isinstance(err, AIUnavailable):
+            _notify_unavailable(err)
+        raise err from exc
     tracker.record(response, model)
     _check_stop(response)
     text = "".join(b.text for b in response.content if getattr(b, "type", "") == "text")
@@ -260,14 +288,11 @@ def research_call(tracker: RunTracker, *, model: str, effort: str, system: str, 
             response = client.beta.messages.create(
                 max_tokens=16000, system=_system_blocks(system), tools=tools, messages=messages, **kwargs
             )
-        except anthropic.BadRequestError as exc:
-            raise AIOutputError(f"Request rejected by the API: {exc}") from exc
-        except anthropic.AuthenticationError as exc:
-            raise AIUnavailable("The Anthropic API key was rejected.") from exc
-        except (anthropic.RateLimitError, anthropic.APIConnectionError) as exc:
-            raise AIError(str(exc)) from exc
-        except anthropic.APIStatusError as exc:
-            raise AIError(f"API error {exc.status_code}") from exc
+        except anthropic.APIError as exc:
+            err = _translate_api_error(exc)
+            if isinstance(err, AIUnavailable):
+                _notify_unavailable(err)
+            raise err from exc
         tracker.record(response, model)
         _check_stop(response)
         seen |= collect_seen_urls(response.content)
