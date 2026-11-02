@@ -100,6 +100,11 @@ class WebsiteImportTests(TestCase):
         self.assertEqual(du.images.count(), 1)
         self.assertEqual(CompanyDocument.objects.count(), 1)
 
+    def test_owner_confirmed_certification_added_once(self):
+        call_command("import_website_data", str(self.tmp), "--certification", "ISO 9001:2015", stdout=StringIO())
+        call_command("import_website_data", str(self.tmp), "--certification", "ISO 9001:2015", stdout=StringIO())
+        self.assertEqual(CompanyProfile.get_solo().certification_list, ["ISO 9001:2015"])
+
     def test_bulk_verify_by_manager_only(self):
         call_command("import_website_data", str(self.tmp), stdout=StringIO())
         self.client.force_login(make_user("ex", Role.EXECUTIVE))

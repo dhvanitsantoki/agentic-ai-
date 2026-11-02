@@ -92,21 +92,25 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("website_dir")
         parser.add_argument("--overwrite-profile", action="store_true", help="Replace company profile fields that are already filled.")
+        parser.add_argument("--certification", action="append", default=[], metavar="NAME",
+                            help="A certification the OWNER has confirmed the company holds (repeatable), "
+                                 "e.g. --certification \"ISO 9001:2015\". Never taken from the website automatically.")
 
-    def handle(self, website_dir, overwrite_profile=False, **opts):
+    def handle(self, website_dir, overwrite_profile=False, certification=(), **opts):
         root = Path(website_dir).resolve()
         data = read_website(root)
         seed_categories()
         with transaction.atomic():
             self._profile(data, overwrite_profile)
+            self._certifications(certification)
             counts = self._products(data, root)
             doc = self._catalogue(root)
         self.stdout.write(self.style.SUCCESS(
             f"Imported {counts['products_new']} new / {counts['products_updated']} updated products, "
             f"{counts['sizes']} sizes, {counts['images']} photos{', catalogue uploaded' if doc else ''}."))
         self.stdout.write("All products are NOT verified yet: a manager must review and verify them (Products page).")
-        self.stdout.write("Not imported - confirm before adding to Settings > Company profile: website certification list "
-                          "(e.g. ISO 9001:2015), lead-free / potable-water / food-grade claims, export country list, revenue target.")
+        self.stdout.write("Not imported unless confirmed by the owner: certifications (use --certification), lead-free / "
+                          "potable-water / food-grade claims, export country list, revenue target.")
 
     def _profile(self, data, overwrite):
         c = data["company"]
@@ -153,6 +157,18 @@ class Command(BaseCommand):
                 changed.append(field)
         p.save()
         self.stdout.write(f"Company profile fields filled: {', '.join(changed) or 'none (already filled)'}")
+
+    def _certifications(self, names):
+        names = [n.strip() for n in names or [] if n and n.strip()]
+        if not names:
+            return
+        p = CompanyProfile.get_solo()
+        held = p.certification_list
+        added = [n for n in names if n not in held]
+        if added:
+            p.certifications = "\n".join(held + added)
+            p.save(update_fields=["certifications", "updated_at"])
+        self.stdout.write(f"Owner-confirmed certifications: {', '.join(held + added)}")
 
     def _category_for(self, product):
         for rule, name in CATEGORY_RULES:

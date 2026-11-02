@@ -86,11 +86,13 @@ sudo -u flotec git clone https://github.com/dhvanitsantoki/flotec-website- /srv/
 ```
 
 ```bash
-sudo -u flotec .venv/bin/python manage.py import_website_data /srv/flotec/website
+sudo -u flotec .venv/bin/python manage.py import_website_data /srv/flotec/website --certification "ISO 9001:2015"
 ```
 
+(`--certification` lists only certifications the owner has confirmed: ISO 9001:2015 was confirmed on 2 Nov 2026.)
+
 Products are imported as *not verified*; a manager reviews them and clicks **Verify all shown** on the
-Products page. Certifications and export-market claims from the website are not copied automatically.
+Products page. Other website claims (lead-free / food-grade, export countries) are not copied until confirmed.
 
 `setup_initial_data` creates the ISO country list (by continent, with time zones), the product
 categories, the 10 e-mail template types, the Day 0/3/7/14/30 follow-up sequence and the
