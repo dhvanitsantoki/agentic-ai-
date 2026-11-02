@@ -402,3 +402,19 @@ class TwoFactorDevice(models.Model):
 def has_active_two_factor(user) -> bool:
     device = getattr(user, "two_factor", None) if user and user.is_authenticated else None
     return bool(device and device.is_active)
+
+
+class StoredFile(models.Model):
+    """An uploaded file kept in the database (MEDIA_STORAGE=database, used on serverless hosting)."""
+
+    name = models.CharField(max_length=500, unique=True)
+    content = models.BinaryField()
+    size = models.PositiveIntegerField(default=0)
+    content_type = models.CharField(max_length=100, blank=True)
+    created_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name

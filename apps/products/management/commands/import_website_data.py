@@ -1,6 +1,9 @@
 """Import company details, products, sizes, photos and the catalogue from the FLOTEC website repository.
 
 Usage:  python manage.py import_website_data /path/to/flotec-website-  [--overwrite-profile]
+        python manage.py import_website_data /path/to/flotec-website- --export-bundle website-data.zip
+            (a ZIP with the data and photos, for hosting where the website repository is not available:
+             upload it at Settings -> Import website data; owner confirmations given here travel with it)
 
 Reads src/data/{company,products}.ts from a checkout of the website (Node.js is used to read the
 TypeScript data files). Website data stays in that private repository; it is copied only into this
@@ -16,13 +19,15 @@ Safety rules applied:
 * no prices, MOQs or packaging are invented (the website has none);
 * the catalogue is uploaded but not approved for sending until a manager ticks it.
 """
+import io
 import json
 import re
 import subprocess
 import tempfile
+import zipfile
 from pathlib import Path
 
-from django.core.files import File
+from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils.text import slugify
@@ -111,11 +116,92 @@ def read_website(root: Path) -> dict:
     return json.loads(res.stdout)
 
 
+IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp")
+CATALOGUE = "downloads/flotec-catalogue.pdf"
+BUNDLE_DATA = "data.json"
+BUNDLE_MAX_FILE = 20 * 1024 * 1024
+
+
+class LocalFiles:
+    """Website files from a checkout of the website repository (its public/ folder)."""
+
+    def __init__(self, root: Path):
+        self.public = (root / "public").resolve()
+
+    def read(self, rel: str):
+        path = (self.public / (rel or "").lstrip("/")).resolve()
+        if not rel or self.public not in path.parents or not path.is_file():
+            return None
+        return path.read_bytes()
+
+
+class ZipFiles:
+    """Website files from an exported bundle (public/... entries)."""
+
+    def __init__(self, zf: zipfile.ZipFile):
+        self.zf = zf
+        self.names = {i.filename: i for i in zf.infolist() if not i.is_dir()}
+
+    def read(self, rel: str):
+        info = self.names.get("public/" + (rel or "").lstrip("/"))
+        if not rel or info is None or info.file_size > BUNDLE_MAX_FILE:
+            return None
+        return self.zf.read(info)
+
+
+def referenced_files(data: dict) -> list[str]:
+    files = []
+    for wp in data.get("products", []):
+        for rel in [wp.get("image")] + list(wp.get("gallery") or []):
+            if rel and Path(rel).suffix.lower() in IMAGE_SUFFIXES and rel not in files:
+                files.append(rel)
+    return files
+
+
+def export_bundle_fn(root: Path, target: Path, data: dict, owner: dict, max_bytes: int) -> list[str]:
+    """Write data.json + referenced photos (+ catalogue if it fits) into a ZIP no larger than max_bytes."""
+    files = LocalFiles(root)
+    notes = []
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(BUNDLE_DATA, json.dumps({**data, "owner_confirmed": owner}, ensure_ascii=False))
+        for rel in referenced_files(data):
+            content = files.read(rel)
+            if content is not None:
+                zf.writestr("public/" + rel.lstrip("/"), content)
+    catalogue = files.read(CATALOGUE)
+    if catalogue is not None:
+        if buf.tell() + len(catalogue) < max_bytes:
+            with zipfile.ZipFile(buf, "a", zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr("public/" + CATALOGUE, catalogue)
+        else:
+            notes.append(f"Catalogue PDF ({len(catalogue) / 1e6:.1f} MB) left out to keep the bundle under "
+                         f"{max_bytes / 1e6:.1f} MB - upload a compressed copy under Catalogues & files.")
+    target.write_bytes(buf.getvalue())
+    notes.insert(0, f"Bundle written: {target} ({target.stat().st_size / 1e6:.2f} MB)")
+    return notes
+
+
+def read_bundle(fileobj) -> tuple[dict, "ZipFiles"]:
+    try:
+        zf = zipfile.ZipFile(fileobj)
+        data = json.loads(zf.read(BUNDLE_DATA))
+    except (zipfile.BadZipFile, KeyError, ValueError) as exc:
+        raise CommandError("This is not a website data bundle (expected a ZIP with data.json).") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("products"), list) or not isinstance(data.get("company"), dict):
+        raise CommandError("The bundle's data.json does not contain website products and company data.")
+    return data, ZipFiles(zf)
+
+
 class Command(BaseCommand):
     help = "Import company profile, products, sizes, photos and catalogue from the FLOTEC website repository."
 
     def add_arguments(self, parser):
         parser.add_argument("website_dir")
+        parser.add_argument("--export-bundle", metavar="ZIP",
+                            help="Do not import: write the website data and photos to this ZIP for upload in the app.")
+        parser.add_argument("--max-bundle-mb", type=float, default=4.3,
+                            help="Size limit for --export-bundle (serverless upload limit; default 4.3).")
         parser.add_argument("--overwrite-profile", action="store_true", help="Replace company profile fields that are already filled.")
         parser.add_argument("--fact", action="append", default=[], metavar="TEXT",
                             help="An extra fact the OWNER has confirmed (repeatable), added to the approved facts.")
@@ -129,16 +215,28 @@ class Command(BaseCommand):
                                  "e.g. --certification \"ISO 9001:2015\". Never taken from the website automatically.")
 
     def handle(self, website_dir, overwrite_profile=False, certification=(), fact=(), confirm_exports=False,
-               confirm_material_safety=False, **opts):
+               confirm_material_safety=False, export_bundle=None, max_bundle_mb=4.3, **opts):
         root = Path(website_dir).resolve()
         data = read_website(root)
+        if export_bundle:
+            owner = {"certifications": list(certification or []), "facts": list(fact or []),
+                     "confirm_exports": confirm_exports, "confirm_material_safety": confirm_material_safety}
+            for note in export_bundle_fn(root, Path(export_bundle), data, owner, int(max_bundle_mb * 1e6)):
+                self.stdout.write(note)
+            return
+        self.import_data(data, LocalFiles(root), overwrite_profile=overwrite_profile, certification=certification,
+                         fact=fact, confirm_exports=confirm_exports, confirm_material_safety=confirm_material_safety)
+
+    def import_data(self, data, files, *, overwrite_profile=False, certification=(), fact=(), confirm_exports=False,
+                    confirm_material_safety=False):
+        """Shared by the command and the in-app bundle upload (Settings -> Import website data)."""
         seed_categories()
         with transaction.atomic():
             self._profile(data, overwrite_profile, confirm_exports)
             self._certifications(certification)
             self._facts(fact)
-            counts = self._products(data, root, confirm_material_safety)
-            doc = self._catalogue(root)
+            counts = self._products(data, files, confirm_material_safety)
+            doc = self._catalogue(files)
         self.stdout.write(self.style.SUCCESS(
             f"Imported {counts['products_new']} new / {counts['products_updated']} updated products, "
             f"{counts['sizes']} sizes, {counts['images']} photos{', catalogue uploaded' if doc else ''}."))
@@ -228,7 +326,7 @@ class Command(BaseCommand):
                 return ProductCategory.objects.get(name=name)
         return ProductCategory.objects.get(name="Other Plastic Irrigation Products")
 
-    def _products(self, data, root, confirm_material_safety=False):
+    def _products(self, data, files, confirm_material_safety=False):
         counts = {"products_new": 0, "products_updated": 0, "sizes": 0, "images": 0, "held": [], "reset": 0}
         for wp in data["products"]:
             category = self._category_for(wp)
@@ -264,22 +362,22 @@ class Command(BaseCommand):
                 counts["sizes"] += 1
             if not product.images.exists():
                 for i, rel in enumerate([wp.get("image")] + list(wp.get("gallery") or [])):
-                    path = root / "public" / (rel or "").lstrip("/")
-                    if rel and path.is_file() and path.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
-                        with path.open("rb") as fh:
-                            img = ProductImage(product=product, caption=wp["name"][:200], sort_order=i)
-                            img.image.save(path.name, File(fh), save=True)
+                    content = files.read(rel) if rel and Path(rel).suffix.lower() in IMAGE_SUFFIXES else None
+                    if content is not None:
+                        img = ProductImage(product=product, caption=wp["name"][:200], sort_order=i)
+                        img.image.save(Path(rel).name, ContentFile(content), save=True)
                         counts["images"] += 1
         return counts
 
-    def _catalogue(self, root):
-        path = root / "public" / "downloads" / "flotec-catalogue.pdf"
+    def _catalogue(self, files):
         title = "FLOTEC product catalogue"
-        if not path.is_file() or CompanyDocument.objects.filter(title=title).exists():
+        if CompanyDocument.objects.filter(title=title).exists():
+            return None
+        content = files.read(CATALOGUE)
+        if content is None:
             return None
         doc = CompanyDocument(title=title, kind=DocumentKind.CATALOGUE, approved_for_sending=False,
                               notes="Imported from the company website. Tick 'approved for sending' after checking it is current.")
-        with path.open("rb") as fh:
-            doc.file.save(path.name, File(fh), save=True)
+        doc.file.save(Path(CATALOGUE).name, ContentFile(content), save=True)
         doc.categories.set(ProductCategory.objects.all())
         return doc

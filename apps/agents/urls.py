@@ -14,4 +14,5 @@ urlpatterns = [
     path("jobs/<int:pk>/", views.job_detail, name="job_detail"),
     path("jobs/<int:pk>/retry/", views.job_retry, name="job_retry"),
     path("runs/", views.run_log, name="run_log"),
+    path("ai-test/", views.ai_test, name="ai_test"),
 ]

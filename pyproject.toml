@@ -1,0 +1,29 @@
+# Used by Vercel (serverless hosting). A VPS installation uses requirements.txt - keep both lists equal
+# (a test checks this).
+[project]
+name = "flotec-sales-ai"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "Django>=5.2,<5.3",
+    "anthropic>=2.3,<3",
+    "croniter>=2.0",
+    "dnspython>=2.6",
+    "cryptography>=43",
+    "reportlab>=4.0",
+    "openpyxl>=3.1",
+    "beautifulsoup4>=4.12",
+    "psycopg[binary]>=3.2",
+    "gunicorn>=23",
+    "whitenoise>=6.7",
+    "requests>=2.32",
+    "jsonschema>=4.21",
+    "tzdata",
+    "qrcode>=7.4",
+]
+
+[tool.vercel]
+entrypoint = "config.wsgi:application"
+
+[tool.vercel.scripts]
+build = "python manage.py vercel_build"

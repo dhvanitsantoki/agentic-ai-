@@ -33,7 +33,8 @@ def render_quotation_pdf(q, draft=False) -> bytes:
     logo = ""
     if p.logo:
         try:
-            logo = Image(p.logo.path, width=35 * mm, height=18 * mm, kind="proportional")
+            with p.logo.open("rb") as fh:  # works for disk and database storage
+                logo = Image(BytesIO(fh.read()), width=35 * mm, height=18 * mm, kind="proportional")
         except Exception:  # noqa: BLE001 - a broken logo must not prevent the quotation
             logo = ""
     t = Table([[header_left, logo]], colWidths=[140 * mm, 40 * mm])

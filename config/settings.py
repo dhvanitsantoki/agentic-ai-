@@ -46,6 +46,9 @@ def env_list(name: str, default: str = "") -> list[str]:
 
 DEBUG = env_bool("DJANGO_DEBUG", False)
 TESTING = env_bool("DJANGO_TESTING", False)
+# Serverless hosting (Vercel): read-only file system, no long-running worker - background jobs are
+# processed by a cron-triggered endpoint and uploaded files are stored in the database.
+SERVERLESS = env_bool("SERVERLESS", env("VERCEL") == "1")
 
 SECRET_KEY = env("DJANGO_SECRET_KEY")
 if not SECRET_KEY:
@@ -54,11 +57,14 @@ if not SECRET_KEY:
     else:
         raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set in production.")
 
-ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
-CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", "")
+# Vercel system variables give the production / deployment host names.
+_VERCEL_HOSTS = [h for h in (env("VERCEL_PROJECT_PRODUCTION_URL", ""), env("VERCEL_URL", ""),
+                             env("VERCEL_BRANCH_URL", "")) if h]
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1") + _VERCEL_HOSTS
 
 # Public base URL, used for OAuth redirect URIs and unsubscribe links in e-mails.
-SITE_URL = env("SITE_URL", "http://localhost:8000").rstrip("/")
+SITE_URL = env("SITE_URL", (f"https://{_VERCEL_HOSTS[0]}" if _VERCEL_HOSTS else "http://localhost:8000")).rstrip("/")
+CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", "") + [f"https://{h}" for h in _VERCEL_HOSTS]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -121,6 +127,8 @@ DATABASE_URL = env("DATABASE_URL", "")
 if DATABASE_URL.startswith(("postgres://", "postgresql://")):
     from urllib.parse import unquote, urlparse
 
+    from urllib.parse import parse_qsl
+
     _u = urlparse(DATABASE_URL)
     DATABASES = {
         "default": {
@@ -130,7 +138,12 @@ if DATABASE_URL.startswith(("postgres://", "postgresql://")):
             "PASSWORD": unquote(_u.password or ""),
             "HOST": _u.hostname or "localhost",
             "PORT": str(_u.port or 5432),
-            "CONN_MAX_AGE": 60,
+            # Serverless: short-lived instances behind a connection pooler (e.g. Neon) - no persistent
+            # connections and no server-side cursors (they do not survive transaction pooling).
+            "CONN_MAX_AGE": 0 if SERVERLESS else 60,
+            "DISABLE_SERVER_SIDE_CURSORS": SERVERLESS,
+            # e.g. ?sslmode=require&channel_binding=require (hosted PostgreSQL)
+            "OPTIONS": dict(parse_qsl(_u.query)),
         }
     }
 else:
@@ -160,18 +173,26 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATIC_ROOT.mkdir(exist_ok=True)
+if not SERVERLESS:
+    STATIC_ROOT.mkdir(exist_ok=True)
 STATICFILES_DIRS = [BASE_DIR / "static"]
+# Uploaded files: on disk (VPS) or in the database (serverless, no persistent disk).
+MEDIA_STORAGE = env("MEDIA_STORAGE", "database" if SERVERLESS else "filesystem")
 STORAGES = {
-    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "default": {"BACKEND": "apps.core.storage.DatabaseStorage" if MEDIA_STORAGE == "database"
+                else "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {
         "BACKEND": (
             "django.contrib.staticfiles.storage.StaticFilesStorage"
-            if (DEBUG or TESTING)
+            if (DEBUG or TESTING or SERVERLESS)
             else "whitenoise.storage.CompressedManifestStaticFilesStorage"
         )
     },
 }
+# Serverless: WhiteNoise serves static files straight from the source folders (no collectstatic output
+# needs to be part of the deployed function bundle).
+WHITENOISE_USE_FINDERS = SERVERLESS
+WHITENOISE_MAX_AGE = 3600 if SERVERLESS else 60
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = Path(env("MEDIA_ROOT", str(BASE_DIR / "media")))
@@ -180,6 +201,8 @@ if TESTING:
 
     MEDIA_ROOT = Path(tempfile.mkdtemp(prefix="flotec-test-media-"))
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+# Serverless platforms cap request/response bodies (Vercel: 4.5 MB).
+SERVERLESS_MAX_BODY_BYTES = int(env("SERVERLESS_MAX_BODY_BYTES", str(4_400_000)))
 DATA_UPLOAD_MAX_MEMORY_SIZE = 25 * 1024 * 1024
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -243,7 +266,17 @@ BACKUP_DIR = Path(env("BACKUP_DIR", str(BASE_DIR / "backups")))
 BACKUP_KEEP = int(env("BACKUP_KEEP", "14"))
 
 LOG_DIR = Path(env("LOG_DIR", str(BASE_DIR / "logs")))
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_TO_FILE = not SERVERLESS
+if LOG_TO_FILE:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+# --- Background jobs ----------------------------------------------------------------
+# A job still "running" after this long is treated as interrupted and queued again.
+JOB_STALE_MINUTES = int(env("JOB_STALE_MINUTES", "20" if SERVERLESS else "120"))
+# Serverless: Vercel Cron calls /cron/tick/ every minute with "Authorization: Bearer <CRON_SECRET>".
+CRON_SECRET = env("CRON_SECRET", "")
+CRON_TICK_BUDGET_SECONDS = int(env("CRON_TICK_BUDGET_SECONDS", "240"))
+CRON_MAX_RUNNING_JOBS = int(env("CRON_MAX_RUNNING_JOBS", "2"))
 
 LOGGING = {
     "version": 1,
@@ -253,15 +286,16 @@ LOGGING = {
     },
     "handlers": {
         "console": {"class": "logging.StreamHandler", "formatter": "standard"},
-        "file": {
+        **({"file": {
             "class": "logging.handlers.RotatingFileHandler",
             "filename": str(LOG_DIR / "app.log"),
             "maxBytes": 5 * 1024 * 1024,
             "backupCount": 5,
             "formatter": "standard",
-        },
+        }} if LOG_TO_FILE else {}),
     },
-    "root": {"handlers": ["console", "file"], "level": "WARNING" if TESTING else env("LOG_LEVEL", "INFO")},
+    "root": {"handlers": ["console", "file"] if LOG_TO_FILE else ["console"],
+             "level": "WARNING" if TESTING else env("LOG_LEVEL", "INFO")},
     "loggers": {
         "django.db.backends": {"level": "WARNING"},
         "anthropic": {"level": "WARNING"},

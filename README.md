@@ -25,6 +25,7 @@ anything commercial, technical or legal.
 * [Architecture, stack, integrations, operating costs, phase plan](docs/ARCHITECTURE.md)
 * [Installation guide](docs/INSTALL.md)
 * [Mailbox (Zoho / Gmail / Outlook) setup](docs/EMAIL_SETUP.md)
+* [Hosting on Vercel (serverless)](docs/VERCEL.md)
 * [User guide](docs/USER_GUIDE.md)
 * [Phase reports, test results, pending items](docs/PHASE_REPORTS.md)
 

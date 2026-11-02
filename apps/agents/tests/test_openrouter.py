@@ -278,7 +278,7 @@ class SelfTestCommandTests(TestCase):
 
         out = StringIO()
         with mock.patch("apps.agents.llm.requests.post", side_effect=post or []), \
-                mock.patch("apps.agents.management.commands.ai_selftest.requests.get", side_effect=get or []):
+                mock.patch("apps.agents.selftest.requests.get", side_effect=get or []):
             call_command("ai_selftest", *args, stdout=out)
         return out.getvalue()
 

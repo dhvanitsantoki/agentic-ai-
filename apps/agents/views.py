@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
@@ -35,6 +36,7 @@ def control(request):
         "spend": month_spend(),
         "ai_configured": ai_configured(),
         "ai_tasks": _ai_task_rows(sys),
+        "serverless": settings.SERVERLESS,
         "modes": ExecutionMode.choices,
         "last_worker_activity": Job.objects.exclude(started_at=None).order_by("-started_at").values_list("started_at", flat=True).first(),
     })
@@ -153,3 +155,20 @@ def _ai_task_rows(sys) -> list[dict]:
     status, providers = ai_status(sys), task_providers(sys)
     return [{"task": labels[t], "provider": "OpenRouter" if providers[t] == "openrouter" else "Anthropic",
              "ok": status[t]} for t in labels]
+
+
+@admin_required
+@require_POST
+def ai_test(request):
+    """One live request with a synthetic test e-mail to check the AI key, model and limits."""
+    from .selftest import describe, run_selftest
+
+    provider = request.POST.get("provider") if request.POST.get("provider") in ("anthropic", "openrouter") else None
+    out = run_selftest(provider)
+    lines = describe(out)
+    audit("ai.selftest", None, user=request.user, summary=lines[-1][:300])
+    level = messages.success if out["ok"] and out["verdict"] == "PASS" else (messages.warning if out["ok"] else messages.error)
+    for line in lines[:-1]:
+        messages.info(request, line)
+    level(request, lines[-1])
+    return redirect("agents:control")

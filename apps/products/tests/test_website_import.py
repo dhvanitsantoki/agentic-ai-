@@ -142,3 +142,56 @@ class WebsiteImportTests(TestCase):
         self.assertIn("Lead-free material", du.technical_specifications)
         self.assertFalse(du.is_verified, "changed text must be verified again")
         self.assertIn("need verifying again", out.getvalue())
+
+
+@skipUnless(shutil.which("node"), "Node.js not installed")
+class WebsiteBundleTests(WebsiteImportTests):
+    """Bundle export (command) + upload in the app (Products -> Import CSV -> Website data)."""
+
+    def export(self, *extra):
+        target = self.tmp / "bundle.zip"
+        out = StringIO()
+        call_command("import_website_data", str(self.tmp), "--export-bundle", str(target), *extra, stdout=out)
+        return target, out.getvalue()
+
+    def test_export_writes_bundle_without_importing(self):
+        target, out = self.export("--certification", "ISO 9001:2015")
+        self.assertIn("Bundle written", out)
+        self.assertEqual(Product.objects.count(), 0, "export does not import")
+        import zipfile
+
+        names = zipfile.ZipFile(target).namelist()
+        self.assertIn("data.json", names)
+        self.assertIn("public/images/du.jpg", names)
+        self.assertIn("public/downloads/flotec-catalogue.pdf", names)
+
+    def test_large_catalogue_left_out(self):
+        target, out = self.export("--max-bundle-mb", "0.0001")
+        self.assertIn("left out", out)
+
+    def test_upload_imports_with_owner_confirmations(self):
+        target, _ = self.export("--certification", "ISO 9001:2015", "--fact", "Now expanding into export markets")
+        self.client.force_login(make_user("mgr", Role.MANAGER))
+        with target.open("rb") as fh:
+            self.assertEqual(self.client.post("/products/import-website/", {"bundle": fh}).status_code, 403)
+        self.client.force_login(make_user("boss", Role.ADMIN))
+        with target.open("rb") as fh:
+            resp = self.client.post("/products/import-website/", {"bundle": fh}, follow=True)
+        self.assertContains(resp, "Imported 2 new")
+        self.assertEqual(Product.objects.filter(is_verified=False).count(), 2)
+        du = Product.objects.get(name="RPVC Double Union Ball Valve")
+        self.assertEqual(du.images.count(), 1)
+        self.assertNotIn("potable", du.description.lower(), "unconfirmed claims stay out")
+        p = CompanyProfile.get_solo()
+        self.assertEqual(p.certification_list, ["ISO 9001:2015"])
+        self.assertIn("Now expanding into export markets", p.approved_fact_list)
+        self.assertEqual(CompanyDocument.objects.count(), 1)
+
+    def test_rejects_other_files(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        self.client.force_login(make_user("boss", Role.ADMIN))
+        resp = self.client.post("/products/import-website/",
+                                {"bundle": SimpleUploadedFile("x.zip", b"not a zip")}, follow=True)
+        self.assertContains(resp, "not a website data bundle")
+        self.assertEqual(Product.objects.count(), 0)

@@ -1,6 +1,6 @@
 # Phase reports
 
-Test totals: **179 automated tests, all passing on SQLite and on PostgreSQL 16**
+Test totals: **204 automated tests, all passing on SQLite and on PostgreSQL 16**
 (`python manage.py test`). AI and mailbox providers are tested with fakes/mocked HTTP; nothing in
 the test suite calls a real external service.
 
@@ -126,6 +126,17 @@ mobile layout); background worker executed the scheduled jobs, the nightly pipel
   notification; the free daily limit makes jobs wait until the reset without using up their retries.
   Research stays on Anthropic. Request/response handling is tested with mocked HTTP only - the
   development container cannot reach openrouter.ai, so the first live call happens on the server.
+* **Vercel (serverless) hosting** (`docs/VERCEL.md`): cron endpoint `/cron/tick/` (secret-protected, time
+  budget, max. 2 running jobs, faster recovery of interrupted jobs) instead of the worker; nightly research
+  runs queued as separate jobs; uploaded files stored in the database and served to signed-in users only
+  (oversized files explained instead of failing); Neon connection options; console-only logging; build
+  step for migrations, initial data and the first admin account (`OWNER_INITIAL_PASSWORD`); website data
+  as an uploadable ZIP bundle (Products -> Import CSV -> Website data) so the private website repository is
+  never needed on the server; *Test AI* button on the Automation page. Verified in a local simulation
+  (VERCEL=1, production settings, gunicorn, headless browser): login, bundle upload (43 products,
+  43 photos from database storage), cron authorisation, HTTPS redirect, host validation.
+  Not yet deployed: the Vercel connection available here may not create projects (403), so the owner
+  creates the project in the dashboard.
 * **`manage.py ai_selftest`** – one live request with a synthetic test e-mail per provider: shows the
   answering model, tokens, cost, the OpenRouter key's limits (never the key) and PASS/FAILED.
 * **Fix:** the website importer copied food-safe / potable-water / lead-free statements into product
@@ -145,6 +156,7 @@ mobile layout); background worker executed the scheduled jobs, the nightly pipel
 
 | Item | Why pending | What to do |
 |---|---|---|
+| Vercel deployment | Project creation through the Vercel connection was refused (403 forbidden) | Owner follows `docs/VERCEL.md` steps 1-6 in the Vercel dashboard (Pro plan, import repo, env vars, Neon, protection), then steps 7-9 |
 | Live OpenRouter call | openrouter.ai was still blocked for the development session after it was allowed (network changes apply to new sessions); the live self-test reached only the proxy ("Could not reach OpenRouter") | Run `manage.py ai_selftest --provider openrouter` in a new session or on the server (key in `OPENROUTER_API_KEY`); then draft one e-mail (company page → *Draft e-mail (AI)*) and check *Automation → Agent log* |
 | Live Claude API calls | Key works, but the Anthropic account has no credits yet | Add credits (console.anthropic.com → Plans & Billing), then run one research run (1 country, 3 companies) and one draft; check *Automation → Agent log*. Website verification needs normal internet access (it is blocked in the development container, not on a normal server). |
 | Live mailbox connections | Need the company's OAuth apps and a public HTTPS URL | Follow `docs/EMAIL_SETUP.md`, connect, send one test e-mail to an internal address, reply to it, check the Inbox |

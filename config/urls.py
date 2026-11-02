@@ -1,9 +1,8 @@
-from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path, re_path
-from django.views.static import serve
 
+from apps.agents import cron as agent_cron
 from apps.core import two_factor
 from apps.core import views as core_views
 from apps.outreach import views as outreach_views
@@ -21,6 +20,7 @@ urlpatterns = [
     path("accounts/password/", auth_views.PasswordChangeView.as_view(), name="password_change"),
     path("accounts/password/done/", auth_views.PasswordChangeDoneView.as_view(), name="password_change_done"),
     path("healthz", core_views.healthz, name="healthz"),
+    path("cron/tick/", agent_cron.tick, name="cron_tick"),
     path("u/<str:token>/", outreach_views.unsubscribe, name="unsubscribe"),
     path("admin/", admin.site.urls),
     path("", include("apps.core.urls")),
@@ -35,5 +35,5 @@ urlpatterns = [
     path("quotations/", include("apps.quotations.urls")),
     path("reports/", include("apps.reports.urls")),
     # Uploaded files are served only to signed-in users (LoginRequiredMiddleware applies).
-    re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
+    re_path(r"^media/(?P<path>.+)$", core_views.media, name="media"),
 ]

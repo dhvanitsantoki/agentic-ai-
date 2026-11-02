@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
@@ -8,7 +9,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from apps.core.audit import audit
-from apps.core.permissions import editor_required, manager_required
+from apps.core.permissions import admin_required, editor_required, manager_required
 
 from .forms import (
     CategoryForm, CsvUploadForm, DocumentForm, ImageForm, PriceItemForm, PriceListForm, ProductForm,
@@ -472,3 +473,51 @@ def sizes_import(request):
     return _bulk_import(request, title="Import sizes for all products (CSV)", columns=SIZE_COLUMNS, template_kind="sizes",
                         importer=import_sizes, action="product.sizes_import",
                         extra_help="product_name must match an existing product (add material if two products share a name). SKU must be unique.")
+
+
+class WebsiteBundleForm(forms.Form):
+    bundle = forms.FileField(label="Website data bundle (ZIP)",
+                             help_text="The website-data.zip prepared from the FLOTEC website repository.")
+    overwrite_profile = forms.BooleanField(required=False, label="Replace company profile fields that are already filled")
+
+
+@admin_required
+def website_bundle_import(request):
+    """Import the company profile, products, sizes and photos from a website data bundle.
+
+    For hosting where the website repository is not available (e.g. Vercel). Products arrive unverified;
+    owner confirmations recorded when the bundle was prepared are applied; nothing else is assumed.
+    """
+    from io import StringIO
+
+    from django.core.management.base import CommandError
+
+    from .management.commands.import_website_data import Command as WebsiteImport
+    from .management.commands.import_website_data import read_bundle
+
+    form = WebsiteBundleForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and form.is_valid():
+        out = StringIO()
+        try:
+            data, files = read_bundle(form.cleaned_data["bundle"])
+            owner = data.get("owner_confirmed") or {}
+            WebsiteImport(stdout=out).import_data(
+                data, files, overwrite_profile=form.cleaned_data["overwrite_profile"],
+                certification=[str(c) for c in owner.get("certifications") or []],
+                fact=[str(f) for f in owner.get("facts") or []],
+                confirm_exports=bool(owner.get("confirm_exports")),
+                confirm_material_safety=bool(owner.get("confirm_material_safety")),
+            )
+        except CommandError as exc:
+            messages.error(request, str(exc))
+        else:
+            report = out.getvalue().strip()
+            audit("products.website_import", None, user=request.user, summary=report.splitlines()[0][:300] if report else "")
+            for line in report.splitlines():
+                messages.info(request, line)
+            return redirect("products:product_list")
+    return render(request, "core/form_page.html", {
+        "form": form, "title": "Import website data", "multipart": True, "submit_label": "Import",
+        "subtitle": "Company profile, products, sizes and photos from the FLOTEC website. Products arrive "
+                    "NOT verified; claims the owner has not confirmed are left out.",
+    })

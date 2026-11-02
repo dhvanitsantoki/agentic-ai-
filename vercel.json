@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["bom1"],
+  "functions": {
+    "config/wsgi.py": { "maxDuration": 800 }
+  },
+  "crons": [
+    { "path": "/cron/tick/", "schedule": "* * * * *" }
+  ]
+}

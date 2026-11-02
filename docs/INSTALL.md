@@ -1,5 +1,7 @@
 # Installation guide
 
+For Vercel (serverless) hosting see [VERCEL.md](VERCEL.md); this guide covers a VPS.
+
 Target: one Ubuntu 24.04 server (2 vCPU, 2–4 GB RAM), PostgreSQL 16, Nginx, HTTPS.
 Estimated time: 45–60 minutes. Commands assume a user with `sudo`.
 

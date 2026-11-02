@@ -11,6 +11,7 @@ import socket
 import time
 import traceback
 
+from django.conf import settings
 from django.db import close_old_connections, connection, transaction
 from django.utils import timezone
 
@@ -21,7 +22,6 @@ from .models import Job
 from .registry import HANDLERS, AutomationHalted
 
 log = logging.getLogger(__name__)
-STALE_AFTER = timezone.timedelta(hours=2)
 
 
 def worker_id() -> str:
@@ -93,7 +93,7 @@ def _notify_failure(job, exc):
 
 
 def recover_stale_jobs():
-    cutoff = timezone.now() - STALE_AFTER
+    cutoff = timezone.now() - timezone.timedelta(minutes=settings.JOB_STALE_MINUTES)
     return Job.objects.filter(status=Job.Status.RUNNING, locked_at__lt=cutoff).update(
         status=Job.Status.QUEUED, locked_by="", last_error="Recovered after worker interruption."
     )
@@ -118,6 +118,36 @@ def work_once(wid: str | None = None, max_jobs: int = 20) -> int:
         run_job(job)
         done += 1
     return done
+
+
+def process_tick(budget_seconds: int, max_running: int, wid: str | None = None) -> dict:
+    """One cron invocation on serverless hosting: schedule due tasks, then run jobs until the time
+    budget is used, never more than `max_running` jobs at once across invocations.
+
+    A job that starts before the budget runs out may run longer, up to the platform's function limit.
+    """
+    wid = wid or worker_id()
+    deadline = time.monotonic() + budget_seconds
+    state = SystemSettings.get_solo().automation_state
+    result = {"state": state, "recovered": 0, "scheduled": 0, "processed": 0, "busy": False}
+    if state == AutomationState.STOPPED:
+        return result
+    result["recovered"] = recover_stale_jobs()
+    if state == AutomationState.RUNNING:
+        result["scheduled"] = len(scheduler.tick())
+    while time.monotonic() < deadline:
+        if Job.objects.filter(status=Job.Status.RUNNING).count() >= max_running:
+            result["busy"] = True
+            break
+        state = SystemSettings.get_solo().automation_state
+        if state == AutomationState.STOPPED:
+            break
+        job = claim_next_job(wid, state)
+        if job is None:
+            break
+        run_job(job)
+        result["processed"] += 1
+    return result
 
 
 def run_forever(sleep_seconds: int = 15):

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}File too large{% endblock %}
+{% block page_title %}File too large to open here{% endblock %}
+{% block content %}
+<div class="alert alert-warning">
+  <strong>{{ name }}</strong> is {{ size|filesizeformat }}. This hosting can deliver files up to about 4 MB to the browser,
+  so it cannot be opened here. It is still stored and can be attached to e-mails as normal.
+  To view it, open the original file on your computer, or upload a smaller (compressed) version.
+</div>
+{% endblock %}

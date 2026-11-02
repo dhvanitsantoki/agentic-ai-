@@ -10,6 +10,7 @@ urlpatterns = [
     path("import/", views.product_import, name="product_import"),
     path("verify-all/", views.product_bulk_verify, name="product_bulk_verify"),
     path("import-sizes/", views.sizes_import, name="sizes_import"),
+    path("import-website/", views.website_bundle_import, name="website_bundle_import"),
     path("templates/<str:kind>.csv", views.csv_template, name="csv_template"),
     path("<int:pk>/", views.product_detail, name="product_detail"),
     path("<int:pk>/edit/", views.product_edit, name="product_edit"),

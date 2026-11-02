@@ -17,6 +17,8 @@ DEFAULT_SCHEDULE = [
 
 
 def seed_schedule() -> int:
+    from django.conf import settings
+
     created = 0
     for name, kind, cron, payload, description in DEFAULT_SCHEDULE:
         task, was_created = ScheduledTask.objects.get_or_create(
@@ -24,6 +26,8 @@ def seed_schedule() -> int:
         )
         if was_created:
             task.next_run_at = compute_next_run(cron)
-            task.save(update_fields=["next_run_at"])
+            if settings.SERVERLESS and kind == "system.backup":
+                task.enabled = False  # no local disk; the hosted database keeps its own backups
+            task.save(update_fields=["next_run_at", "enabled"])
         created += was_created
     return created

@@ -148,7 +148,7 @@ def admin_reset(request, pk):
     return redirect("core:user_edit", pk=pk)
 
 
-EXEMPT_PREFIXES = ("/accounts/", "/static/", "/healthz", "/u/")
+EXEMPT_PREFIXES = ("/accounts/", "/static/", "/healthz", "/u/", "/cron/")
 
 
 class TwoFactorRequiredMiddleware:

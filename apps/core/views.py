@@ -5,7 +5,11 @@ from django.contrib.auth import views as auth_views
 from django.contrib.auth.decorators import login_not_required
 from django.core.paginator import Paginator
 from django.db.models import Q
-from django.http import JsonResponse
+import mimetypes
+
+from django.core.exceptions import SuspiciousFileOperation
+from django.core.files.storage import default_storage
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -197,3 +201,21 @@ def audit_log(request):
         qs = qs.filter(action__icontains=action)
     page = Paginator(qs, 50).get_page(request.GET.get("page"))
     return render(request, "core/audit_log.html", {"page_obj": page, "action": action})
+
+
+INLINE_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/gif", "image/webp", "text/plain", "text/csv"}
+
+
+def media(request, path):
+    """Uploaded files, for signed-in users only (LoginRequiredMiddleware), from disk or database storage."""
+    try:
+        size = default_storage.size(path)
+    except (FileNotFoundError, ValueError, SuspiciousFileOperation, OSError):
+        raise Http404("File not found") from None
+    if settings.SERVERLESS and size > settings.SERVERLESS_MAX_BODY_BYTES:
+        return render(request, "core/file_too_large.html", {"name": path.rsplit("/", 1)[-1], "size": size}, status=413)
+    content_type = mimetypes.guess_type(path)[0] or "application/octet-stream"
+    response = FileResponse(default_storage.open(path, "rb"), content_type=content_type,
+                            as_attachment=content_type not in INLINE_TYPES, filename=path.rsplit("/", 1)[-1])
+    response["Cache-Control"] = "private, max-age=3600"
+    return response

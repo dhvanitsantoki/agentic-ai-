@@ -14,7 +14,7 @@
       {% if sys.automation_state == 'running' %}<form method="post" action="{% url 'agents:set_state' %}">{% csrf_token %}<input type="hidden" name="state" value="paused"><button class="btn btn-warning"><i class="bi bi-pause-fill"></i> Pause</button></form>{% endif %}
       {% if sys.automation_state != 'stopped' %}<form method="post" action="{% url 'agents:set_state' %}">{% csrf_token %}<input type="hidden" name="state" value="stopped"><button class="btn btn-danger" data-confirm="Emergency stop: cancel all queued jobs and halt every agent immediately?"><i class="bi bi-stop-fill"></i> Stop now</button></form>{% endif %}
     </div>{% endif %}
-    <hr><div class="small">Worker: {% if last_worker_activity %}last job started {{ last_worker_activity|timesince }} ago{% else %}<span class="text-danger">no job has run yet – is <code>manage.py run_worker</code> running?</span>{% endif %} · {{ queued }} queued · {{ running }} running</div>
+    <hr><div class="small">Worker: {% if last_worker_activity %}last job started {{ last_worker_activity|timesince }} ago{% elif serverless %}<span class="text-danger">no job has run yet – check that the Vercel cron job calls /cron/tick/ (CRON_SECRET set, Pro plan)</span>{% else %}<span class="text-danger">no job has run yet – is <code>manage.py run_worker</code> running?</span>{% endif %} · {{ queued }} queued · {{ running }} running</div>
   </div></div></div>
   <div class="col-lg-4"><div class="card h-100"><div class="card-header">Execution mode</div><div class="card-body">
     <div class="fs-6 mb-2"><span class="badge {% if sys.execution_mode == 3 %}bg-danger{% elif sys.execution_mode == 2 %}bg-primary{% else %}bg-secondary{% endif %}">{{ sys.get_execution_mode_display }}</span></div>
@@ -25,6 +25,7 @@
     <div class="value">${{ spend|floatformat:2 }}</div><div class="label">of ${{ sys.monthly_ai_budget_usd }} budget</div>
     <div class="progress mt-2" style="height:8px"><div class="progress-bar {% if spend >= sys.monthly_ai_budget_usd %}bg-danger{% endif %}" style="width:{% widthratio spend sys.monthly_ai_budget_usd 100 %}%"></div></div>
     <ul class="list-unstyled small mt-2 mb-0">{% for row in ai_tasks %}<li><i class="bi {% if row.ok %}bi-check-circle-fill text-success{% else %}bi-x-circle-fill text-danger{% endif %}"></i> {{ row.task }}: {{ row.provider }}{% if not row.ok %} – key not set{% endif %}</li>{% endfor %}</ul>
+    {% if user_is_admin %}<form method="post" action="{% url 'agents:ai_test' %}" class="d-flex gap-1 mt-2">{% csrf_token %}<select name="provider" class="form-select form-select-sm" aria-label="Provider to test"><option value="">Classification provider</option><option value="openrouter">OpenRouter</option><option value="anthropic">Anthropic</option></select><button class="btn btn-sm btn-outline-primary text-nowrap" title="One live request with a synthetic test e-mail">Test AI</button></form>{% endif %}
   </div></div></div>
 </div>
 
